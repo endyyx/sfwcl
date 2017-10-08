@@ -6,10 +6,11 @@
 #include <limits.h>
 #include <sstream>
 
-#define CLIENT_BUILD 1000
+#define CLIENT_BUILD 1001
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+
 
 #ifdef USE_SDK
 	typedef unsigned int uint;
@@ -25,11 +26,14 @@
 	#include "CPPAPI.h"
 	#include "Socket.h"
 	#include "Structs.h"
+	//#include "CGame.h"
+	//#include "FlashMenuObject.h"
 	CPPAPI *luaApi=0;
 	Socket *socketApi=0;
 	ISystem *pSystem=0;
 	IConsole *pConsole=0;
 	IGame *pGame=0;
+	IGame *g_pGame = 0;
 	IScriptSystem *pScriptSystem=0;
 	IGameFramework *pGameFramework=0;
 	IFlashPlayer *pFlashPlayer=0;
@@ -43,6 +47,8 @@ typedef void (__fastcall *PFNJS)(void*,void*);
 typedef bool (__fastcall *PFNGSS)(void*,void*,SServerInfo&);
 typedef void (__fastcall *PFNDE)(void*,void*,EDisconnectionCause, bool,const char*);
 typedef void (__fastcall *PFNSE)(void*,void*,const char*,int);
+typedef void* (__fastcall *PFNGM)(void*, void*);
+typedef void* (__fastcall *PFNGMS)(void*, void*, char);
 
 
 int GAME_VER=6156;
@@ -54,10 +60,21 @@ PFNJS pJoinServer=0;
 PFNGSS pGetSelectedServer=0;
 PFNDE pDisconnectError=0;
 PFNSE pShowError=0;
+PFNGM pGetMenu = 0;
+PFNGMS pGetMenuScreen = 0;
+
+int nFlashObjOffset = 0x30;
+int nScreensOffset = 0x68;
+
+
+#define GET_OFFSET_PTR(type, base, offset) (type)(*(unsigned long long*)(((const char*)(base))+(offset)))
+
+#define GET_MENU GET_OFFSET_PTR(void*, g_pGame, nFlashObjOffset)
+#define GET_MENU_SCREEN(scr) GET_OFFSET_PTR(void*, GET_MENU, nScreensOffset+scr*sizeof(void*))
 
 void *m_ui;
 
-char SvMaster[255]="openspy.org";
+char SvMaster[255]="m.crymp.net";
 
 void ToggleLoading(const char *text,bool loading=true);
 
@@ -75,7 +92,7 @@ void CommandClMaster(IConsoleCmdArgs *pArgs){
 	pScriptSystem->PushFuncParam(buff);
 	pScriptSystem->EndCall();
 
-	//ToggleLoading("Setting master",true);
+	ToggleLoading("Setting master",true);
 }
 void CommandRldMaps(IConsoleCmdArgs *pArgs){
 	ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
@@ -86,7 +103,7 @@ void CommandRldMaps(IConsoleCmdArgs *pArgs){
 #endif
 
 void MemScan(void *base,int size){
-	char buffer[8192]="";
+	char buffer[81920]="";
 	for(int i=0;i<size;i++){
 		if(i%16==0) sprintf(buffer,"%s %#04X: ",buffer,i);
 		sprintf(buffer,"%s %02X",buffer,((char*)base)[i]&0xFF);
@@ -129,12 +146,30 @@ void __fastcall OnShowLoginScr(void *self,void *addr){
 #endif
 }
 
+struct IFlashScreen {
+	IFlashPlayer *pFlashPlayer;
+};
+
 void ToggleLoading(const char *text,bool loading){
-	if(pFlashPlayer){
+	bool en = false;
+	if (!en) return;
+	if (pFlashPlayer) {
+		/*char msg[100];
+		sprintf(msg, "pFlashPlayer: %p", pFlashPlayer);
+		MessageBoxA(0, msg, 0, 0);
+
+		void *pMenu = pGetMenu(g_pGame, pGetMenu);
+
+		for (int i = 0; i < 5; i++) {
+			void *p = 0; // GET_MENU_SCREEN(i);
+			void *pMenuScreen = pGetMenuScreen(pMenu, pGetMenuScreen, i);
+			sprintf(msg, "pMenuScreen%d: %p vs %p [%p]", i, p, pMenuScreen, pMenu);
+			MessageBoxA(0, msg, 0, 0);
+		}*/
 		pFlashPlayer->Invoke1("showLOADING", loading);
-		if(loading){
-			SFlashVarValue args[]={text,false};
-			pFlashPlayer->Invoke("setLOADINGText",args,sizeof(args)/sizeof(args[0]));
+		if (loading) {
+			SFlashVarValue args[] = { text,false };
+			pFlashPlayer->Invoke("setLOADINGText", args, sizeof(args) / sizeof(args[0]));
 		}
 	}
 }
@@ -296,6 +331,10 @@ extern "C" {
 			case 6156:
 				fillNOP((void*)0x3953FB7E,2);
 				fillNOP((void*)0x3953FB87,2);
+				g_pGame = (IGame*)0x392A6FCC;
+				pGetMenu = (PFNGM)0x390B5CA0;
+				pGetMenuScreen = (PFNGMS)0x3921D310;
+
 				pShowLoginScreen=(PFNSHLS)0x39230E00;
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
 
