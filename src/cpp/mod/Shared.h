@@ -8,6 +8,20 @@
 #ifndef SHARED_H
 #define SHARED_H
 
+struct MENU_SCREEN {
+	void *PTR0;
+	void *PTR1;
+};
+typedef MENU_SCREEN* MENU_SCREEN_PTR;
+struct FLASH_OBJ_32_6156 {
+	unsigned char dummy[0x68];
+	MENU_SCREEN_PTR arr[6];
+};
+struct GAME_32_6156 {
+	unsigned char dummy[0x30];
+	FLASH_OBJ_32_6156 *pFlashObj;
+};
+
 /* Trying to compile the headers from SDK => 4MB error log @ G++ */
 #ifdef _MSC_VER
 	#define USE_SDK

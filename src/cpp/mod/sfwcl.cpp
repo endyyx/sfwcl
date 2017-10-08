@@ -26,14 +26,12 @@
 	#include "CPPAPI.h"
 	#include "Socket.h"
 	#include "Structs.h"
-	//#include "CGame.h"
-	//#include "FlashMenuObject.h"
 	CPPAPI *luaApi=0;
 	Socket *socketApi=0;
 	ISystem *pSystem=0;
 	IConsole *pConsole=0;
-	IGame *pGame=0;
-	IGame *g_pGame = 0;
+	GAME_32_6156 *pGameGlobal=0;
+	IGame *pGame = 0;
 	IScriptSystem *pScriptSystem=0;
 	IGameFramework *pGameFramework=0;
 	IFlashPlayer *pFlashPlayer=0;
@@ -63,17 +61,7 @@ PFNSE pShowError=0;
 PFNGM pGetMenu = 0;
 PFNGMS pGetMenuScreen = 0;
 
-int nFlashObjOffset = 0x30;
-int nScreensOffset = 0x68;
-
-
-#define GET_OFFSET_PTR(type, base, offset) (type)(*(unsigned long long*)(((const char*)(base))+(offset)))
-
-#define GET_MENU GET_OFFSET_PTR(void*, g_pGame, nFlashObjOffset)
-#define GET_MENU_SCREEN(scr) GET_OFFSET_PTR(void*, GET_MENU, nScreensOffset+scr*sizeof(void*))
-
 void *m_ui;
-
 char SvMaster[255]="m.crymp.net";
 
 void ToggleLoading(const char *text,bool loading=true);
@@ -92,7 +80,7 @@ void CommandClMaster(IConsoleCmdArgs *pArgs){
 	pScriptSystem->PushFuncParam(buff);
 	pScriptSystem->EndCall();
 
-	ToggleLoading("Setting master",true);
+	//ToggleLoading("Setting master",true);
 }
 void CommandRldMaps(IConsoleCmdArgs *pArgs){
 	ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
@@ -146,26 +134,20 @@ void __fastcall OnShowLoginScr(void *self,void *addr){
 #endif
 }
 
-struct IFlashScreen {
-	IFlashPlayer *pFlashPlayer;
-};
+IFlashPlayer *GetFlashPlayer() {
+	void *pMenu = pGetMenu(pGame, pGetMenu);
+	for (int i = 0; i < 6; i++) {
+		MENU_SCREEN *pMenuScreen = (MENU_SCREEN*)pGetMenuScreen(pMenu, pGetMenuScreen, i);
+		if (pMenuScreen) {
+			return (IFlashPlayer*)pMenuScreen->PTR1;
+		}
+	}
+	return 0;
+}
 
 void ToggleLoading(const char *text,bool loading){
-	bool en = false;
-	if (!en) return;
+	pFlashPlayer = GetFlashPlayer();
 	if (pFlashPlayer) {
-		/*char msg[100];
-		sprintf(msg, "pFlashPlayer: %p", pFlashPlayer);
-		MessageBoxA(0, msg, 0, 0);
-
-		void *pMenu = pGetMenu(g_pGame, pGetMenu);
-
-		for (int i = 0; i < 5; i++) {
-			void *p = 0; // GET_MENU_SCREEN(i);
-			void *pMenuScreen = pGetMenuScreen(pMenu, pGetMenuScreen, i);
-			sprintf(msg, "pMenuScreen%d: %p vs %p [%p]", i, p, pMenuScreen, pMenu);
-			MessageBoxA(0, msg, 0, 0);
-		}*/
 		pFlashPlayer->Invoke1("showLOADING", loading);
 		if (loading) {
 			SFlashVarValue args[] = { text,false };
@@ -221,7 +203,7 @@ bool __fastcall GetSelectedServer(void *self, void *addr, SServerInfo& server){
 		if(GAME_VER==5767)
 			iIp=getField(int,&server,IPOFFSET);
 		sprintf(ip,"%d.%d.%d.%d",(iIp)&0xFF,(iIp>>8)&0xFF,(iIp>>16)&0xFF,(iIp>>24)&0xFF);
-		ToggleLoading("Checking server",true);
+		//ToggleLoading("Checking server",true);
 		IScriptSystem *pScriptSystem=pSystem->GetIScriptSystem();
 		pScriptSystem->BeginCall("CheckSelectedServer");
 		pScriptSystem->PushFuncParam(ip);
@@ -331,7 +313,7 @@ extern "C" {
 			case 6156:
 				fillNOP((void*)0x3953FB7E,2);
 				fillNOP((void*)0x3953FB87,2);
-				g_pGame = (IGame*)0x392A6FCC;
+				pGameGlobal = (GAME_32_6156*)0x392A6FCC;
 				pGetMenu = (PFNGM)0x390B5CA0;
 				pGetMenuScreen = (PFNGMS)0x3921D310;
 
@@ -387,7 +369,7 @@ extern "C" {
 		HMODULE lib=LoadLibraryA(".\\.\\.\\Bin32\\CryGame.dll");
 #endif
 		PFNCREATEGAME createGame=(PFNCREATEGAME)GetProcAddress(lib,"CreateGame");
-		void *pGame=createGame(ptr);
+		pGame=(IGame*)createGame(ptr);
 		GAME_VER=version;
 		patchMem(version);
 		hook(gethostbyname,Hook_GetHostByName);
