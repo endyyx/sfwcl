@@ -47,6 +47,7 @@ typedef void (__fastcall *PFNDE)(void*,void*,EDisconnectionCause, bool,const cha
 typedef void (__fastcall *PFNSE)(void*,void*,const char*,int);
 typedef void* (__fastcall *PFNGM)(void*, void*);
 typedef void* (__fastcall *PFNGMS)(void*, void*, char);
+typedef bool (__fastcall *PFNMIL)(void*, void*);	//pMenuScreen::IsLoaded
 
 
 int GAME_VER=6156;
@@ -60,6 +61,7 @@ PFNDE pDisconnectError=0;
 PFNSE pShowError=0;
 PFNGM pGetMenu = 0;
 PFNGMS pGetMenuScreen = 0;
+PFNMIL pMenuIsLoaded = 0;
 
 void *m_ui;
 char SvMaster[255]="m.crymp.net";
@@ -134,11 +136,13 @@ void __fastcall OnShowLoginScr(void *self,void *addr){
 #endif
 }
 
-IFlashPlayer *GetFlashPlayer() {
+IFlashPlayer *GetFlashPlayer(int offset=0, int pos=-1) {
+	if (!pGetMenu) return pFlashPlayer;
 	void *pMenu = pGetMenu(pGame, pGetMenu);
-	for (int i = 0; i < 6; i++) {
+	for (int i = offset; i < 6; i++) {
+		if (pos != -1 && i != pos) continue;
 		MENU_SCREEN *pMenuScreen = (MENU_SCREEN*)pGetMenuScreen(pMenu, pGetMenuScreen, i);
-		if (pMenuScreen) {
+		if (pMenuScreen && pMenuIsLoaded(pMenuScreen, pMenuIsLoaded)) {
 			return (IFlashPlayer*)pMenuScreen->PTR1;
 		}
 	}
@@ -316,6 +320,7 @@ extern "C" {
 				pGameGlobal = (GAME_32_6156*)0x392A6FCC;
 				pGetMenu = (PFNGM)0x390B5CA0;
 				pGetMenuScreen = (PFNGMS)0x3921D310;
+				pMenuIsLoaded = (PFNMIL)0x39249410;
 
 				pShowLoginScreen=(PFNSHLS)0x39230E00;
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
