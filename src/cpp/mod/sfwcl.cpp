@@ -39,15 +39,16 @@
 
 #define getField(type,base,offset) (*(type*)(((unsigned char*)base)+offset))
 
-typedef void (__fastcall *PFNLOGIN)(void*,void*,const char*);
-typedef void (__fastcall *PFNSHLS)(void*,void*);
-typedef void (__fastcall *PFNJS)(void*,void*);
-typedef bool (__fastcall *PFNGSS)(void*,void*,SServerInfo&);
-typedef void (__fastcall *PFNDE)(void*,void*,EDisconnectionCause, bool,const char*);
-typedef void (__fastcall *PFNSE)(void*,void*,const char*,int);
-typedef void* (__fastcall *PFNGM)(void*, void*);
-typedef void* (__fastcall *PFNGMS)(void*, void*, char);
-typedef bool (__fastcall *PFNMIL)(void*, void*);	//pMenuScreen::IsLoaded
+typedef void (__fastcall *PFNLOGIN)(void*,void*,const char*);		//HUD::OnLogin
+typedef void (__fastcall *PFNSHLS)(void*,void*);					//HUD::ShowLoginScreen
+typedef void (__fastcall *PFNJS)(void*,void*);						//HUD::JoinServer
+typedef bool (__fastcall *PFNGSS)(void*,void*,SServerInfo&);		//HUD::GetSelectedServer
+typedef void (__fastcall *PFNDE)(void*,void*,EDisconnectionCause, bool,const char*);	//HUD::OnDisconnectError
+typedef void (__fastcall *PFNSE)(void*,void*,const char*,int);		//HUD::ShowError
+typedef void* (__fastcall *PFNGM)(void*, void*);					//CGame::GetMenu
+typedef void* (__fastcall *PFNGMS)(void*, void*, char);				//FlashObj::GetMenuScreen
+typedef bool (__fastcall *PFNMIL)(void*, void*);					//FlashScreen::IsLoaded
+typedef int (__fastcall *PFNGU)(void*, void*, bool, unsigned int);	//CGame::Update
 
 
 int GAME_VER=6156;
@@ -62,11 +63,13 @@ PFNSE pShowError=0;
 PFNGM pGetMenu = 0;
 PFNGMS pGetMenuScreen = 0;
 PFNMIL pMenuIsLoaded = 0;
+PFNGU pGameUpdate = 0;
 
 void *m_ui;
 char SvMaster[255]="m.crymp.net";
 
 void ToggleLoading(const char *text,bool loading=true);
+void OnUpdate(float frameTime);
 
 #ifdef USE_SDK
 void CommandClMaster(IConsoleCmdArgs *pArgs){
@@ -241,6 +244,13 @@ void __fastcall DisconnectError(void *self, void *addr,EDisconnectionCause dc, b
 	pDisconnectError(self,addr,dc,connecting,serverMsg);
 	hook((void*)pDisconnectError,(void*)DisconnectError);
 }
+int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
+	unhook(pGameUpdate);
+	int res = pGameUpdate(self, addr, p1, p2);
+	hook((void*)pGameUpdate, (void*)GameUpdate);
+	OnUpdate(0.0f);
+	return res;
+}
 BOOL APIENTRY DllMain(HANDLE,DWORD,LPVOID){
 	return TRUE;
 }
@@ -259,6 +269,10 @@ int OnImpulse( const EventPhys *pEvent ){
 #endif
 }
 #endif
+
+void OnUpdate(float frameTime) {
+	//MessageBoxA(0, "Update", 0, 0);
+}
 
 extern "C" {
 	__declspec(dllexport) void patchMem(int ver){
@@ -324,6 +338,9 @@ extern "C" {
 
 				pShowLoginScreen=(PFNSHLS)0x39230E00;
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
+
+				pGameUpdate = (PFNGU)0x390B5A40;
+				hook((void*)pGameUpdate, (void*)GameUpdate);
 
 				pJoinServer=(PFNSHLS)0x3923D820;
 				hook((void*)pJoinServer,(void*)JoinServer);
