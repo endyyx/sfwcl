@@ -56,6 +56,7 @@ namespace Network{
 			HINTERNET hConnect = InternetConnect(hSession,host.c_str(),
 				INTERNET_DEFAULT_HTTP_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);
 
+			if (timeout > 1000) timeout /= 1000;
 			DWORD timeo = timeout * 1000;
 
 			InternetSetOption(hConnect, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeo, sizeof timeo);
@@ -79,7 +80,7 @@ namespace Network{
 				//MessageBoxA(0, ss.str().c_str(), "SUCCESS", 0);
 			}
 			else {
-				ss << "Error: WinInet code: " << GetLastError();
+				ss << "\\\\Error: WinInet code: " << GetLastError();
 			}
 			//else MessageBoxA(0, "FAIL", 0, 0);
 			InternetCloseHandle(hRequest);
@@ -97,7 +98,7 @@ namespace Network{
 				delete[] buffer;
 				buffer = 0;
 			}
-			return std::string("Error: Fatal error: ") + ex.what();
+			return std::string("\\\\Error: Fatal error: ") + ex.what();
 		}
 
 
@@ -146,7 +147,7 @@ namespace Network{
 		if(!success) return msg;
 		return buffer;
 		} else return "Error: Couldnt initialize cURL";*/
-		return "Error: unknown error";
+		return "\\\\Error: unknown error";
 	}
 	std::string ReturnError(std::string error){
 		return error;
