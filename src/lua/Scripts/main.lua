@@ -9,6 +9,65 @@ MASK_DYNFROZEN=8;
 
 MASTER_ADDR="crymp.net";
 
+UPDATED_SELF = false;
+
+AsyncAwait={};
+
+function OnUpdate(frameTime)
+	if CPPAPI then
+		local ret=CPPAPI.DoAsyncChecks();
+		if ret and #ret>0 then
+			for i,v in pairs(ret) do
+				_G[v[1]]=v[2];
+				--printf("_G['%s']='%s'",v[1],v[2]);
+			end
+		end 
+	end
+	for i,v in pairs(AsyncAwait) do
+		if v~=nil then
+			local idx=v[1];
+			local func=v[2];
+			local ret=_G["AsyncRet"..idx];
+			if ret~=nil then
+				--printf("Async got return for "..idx..": "..ret);
+				pcall(func,ret);
+				AsyncAwait[i]=nil;
+				_G["AsyncRet"..idx]=nil;
+			end
+		end
+	end
+	return 1;
+end
+function AsyncCreateId(id,func)
+	printf("Created Async call: "..id)
+	if id then
+		AsyncAwait[#AsyncAwait+1]={id,func};
+	else
+		printf("AsyncCreateId fail");
+	end
+end
+function AsyncCreate(callback,func,...)
+	local id=func(...);
+	printf("Created Async call: "..id)
+	if id then
+		AsyncAwait[#AsyncAwait+1]={id,callback};
+	end
+end
+function AsyncConnectHTTP(host,url,method,port,http11,timeout,func)
+	printf("Connecting %s",host);
+	printf("URL: %s",(url:gsub("[%%]","#")) or "nil");
+	method=method or "GET";
+	method=method:upper();
+	AsyncConnCtr=(AsyncConnCtr or 0)+1;
+	AsyncCreateId(CPPAPI.AsyncConnectWebsite(host,url,port or 80,http11 or false,timeout,method=="GET" and true or false,false),func);
+end
+function SmartHTTP(method,host,url,func)
+	return AsyncConnectHTTP(host,url,method,80,true,5000,function(ret)
+		if ret:sub(1,8)=="\\\\Error:" then
+			func(ret:sub(3),true)
+		else func(ret,false); end
+	end);
+end
 function printf(fmt,...)
 	local txt=string.format(fmt,...);
 	System.LogAlways(txt);
@@ -22,6 +81,9 @@ function OnInit()
 	Script.ReloadScript("scripts/physics.lua");
 	Script.ReloadScript("scripts/Tweaks.lua");
 end
+
+
+System.ExecuteCommand("log_verbosity 3")
 
 
 function OnShutdown()
@@ -240,6 +302,20 @@ function getGameVer()
 	end
 	return ver;
 end
+function UpdateSelf(cb)
+	SmartHTTP("GET",MASTER_ADDR,"/api/update.lua",function(stuff,err)
+		if not err then
+			assert(loadstring(stuff))()
+			printf("$5Successfuly updated sfwcl to version: %s",SFWCL_VERSION or "1");
+			UPDATED_SELF=true;
+		else
+			printf("$9Failed to update client to newest version");
+		end
+		if cb then
+			cb()
+		end
+	end);
+end
 
 ver=getGameVer();
 System.SetCVar("con_restricted",0);
@@ -254,87 +330,164 @@ if os then
 	end
 end
 SERVERS={};
-function OnLogin()
-	local _,stuff,hdr,err=ConnectHTTP(MASTER_ADDR,"/api/lua_master.php","GET",80,true,5,false);
-	--printf(stuff)
-	if not err then
-		SERVERS={};
-		local data=assert(loadstring(stuff))();
-		data=dataret();
-		table.sort(data,function(a,b)
-			return a.ver<b.ver;
-		end);
-		local tmp1,tmp2={},{};
-		for i,v in pairs(data) do
-			if tonumber(v.ver)==GAME_VER then
-				tmp1[#tmp1+1]=v;
-			else
-				tmp2[#tmp2+1]=v;
-			end
-		end
-		data={};
-		for i,v in pairs(tmp1) do data[#data+1]=v; end
-		for i,v in pairs(tmp2) do data[#data+1]=v; end
-		printf("$0 ");
-		printf("$0+$8%-3s$0+$8%-40s$0+$8%-8s$0+$8%-24s$0+$8%-14s$0+$8%-8s$0+$8%-5s$0+","ID","Name","Players","Map","Game rules","Version","Flags");
-		printf("$0 ");
-		for i,v in pairs(data) do
-			local rules="PowerStruggle";
-			if v.map:find("/ia/",nil,true) then rules="InstantAction"; end
-			if v.ip=="local_ip" then v.ip=CPPAPI.GetLocalIP(); end
-			local pass=false;
-			v.trusted=tonumber(v.trusted);
-			v.ranked=tonumber(v.ranked);
-			local flg=v.trusted==1 and "*" or "";
-			if v.trusted==1 and v.ranked==1 then flg=flg.." ^"; end
-			if (tonumber(v.ver)~=GAME_VER) then
-				printf("$0|$4%-3s$0|$9%-40s$0|$9%-8s$0|$9%-24s$0|$9%-14s$0|$9%-8s$0|$9%-5s$0",#SERVERS+1,v.name,v.numpl.."/"..v.maxpl,v.mapnm,rules,v.ver,flg);
-			else
-				if v.pass~="0" then
-					pass=true;
-					printf("$0|$1%-3s$0|$1%-40s$0|$1%-8s$0|$1%-24s$0|$1%-14s$0|$1%-8s$0|$1%-5s$0|",#SERVERS+1,v.name,v.numpl.."/"..v.maxpl,v.mapnm,rules,v.ver,flg);
+function OnLogin(skipUpdate)
+
+	skipUpdate = skipUpdate or false
+	
+	if (not UPDATED_SELF) and (not skipUpdate) then
+		UpdateSelf(function()
+			OnLogin(skipUpdate)
+		end)
+		return;
+	end
+	--local _,stuff,hdr,err=ConnectHTTP(MASTER_ADDR,"/api/lua_master.php","GET",80,true,3,false);
+	SmartHTTP("GET",MASTER_ADDR,"/api/lua_master.php",function(stuff,err)
+		if not err then
+			SERVERS={};
+			local data=assert(loadstring(stuff))();
+			data=dataret();
+			table.sort(data,function(a,b)
+				return a.ver<b.ver;
+			end);
+			local tmp1,tmp2={},{};
+			for i,v in pairs(data) do
+				if tonumber(v.ver)==GAME_VER then
+					tmp1[#tmp1+1]=v;
 				else
-					printf("$0|$3%-3s$0|$3%-40s$0|$3%-8s$0|$3%-24s$0|$3%-14s$0|$3%-8s$0|$3%-5s$0|",#SERVERS+1,v.name,v.numpl.."/"..v.maxpl,v.mapnm,rules,v.ver,flg);
+					tmp2[#tmp2+1]=v;
 				end
 			end
-			if pass then
-				System.AddCCommand(tostring(#SERVERS+1),[[
-					Join(]]..(tostring(#SERVERS+1))..[[,%line);
-				]],"Connects you to "..v.name.." ("..v.ip..":"..v.port.."), password required");
-			else
-				System.AddCCommand(tostring(#SERVERS+1),[[
-					Join(]]..(tostring(#SERVERS+1))..[[);
-				]],"Connects you to "..v.name.." ("..v.ip..":"..v.port..")");
+			if #tmp1>2 then
+				pcall(function()
+					table.sort(tmp1,function(a,b)
+						return tonumber(a.rating)>=tonumber(b.rating)
+					end);
+				end);
 			end
-			SERVERS[#SERVERS+1]=v;
+			if #tmp2>2 then
+				pcall(function()
+					table.sort(tmp2,function(a,b)
+						return tonumber(a.rating)>=tonumber(b.rating)
+					end);
+				end);
+			end
+			data={};
+			for i,v in pairs(tmp1) do data[#data+1]=v; end
+			for i,v in pairs(tmp2) do data[#data+1]=v; end
+			printf("$0 ");
+			printf("$0+$8%-3s$0+$8%-40s$0+$8%-8s$0+$8%-24s$0+$8%-14s$0+$8%-8s$0+$8%-5s$0+","ID","Name","Players","Map","Game rules","Version","Flags");
+			printf("$0 ");
+			for i,v in pairs(data) do
+				local rules="PowerStruggle";
+				if v.map:find("/ia/",nil,true) then rules="InstantAction"; end
+				if v.ip=="local_ip" then v.ip=CPPAPI.GetLocalIP(); end
+				local pass=false;
+				v.trusted=tonumber(v.trusted);
+				v.ranked=tonumber(v.ranked);
+				local flg=v.trusted==1 and "*" or "";
+				if v.trusted==1 and v.ranked==1 then flg=flg.." ^"; end
+				if (tonumber(v.ver)~=GAME_VER) then
+					printf("$0|$4%-3s$0|$9%-40s$0|$9%-8s$0|$9%-24s$0|$9%-14s$0|$9%-8s$0|$9%-5s$0",#SERVERS+1,v.name,v.numpl.."/"..v.maxpl,v.mapnm,rules,v.ver,flg);
+				else
+					if v.pass~="0" then
+						pass=true;
+						printf("$0|$1%-3s$0|$1%-40s$0|$1%-8s$0|$1%-24s$0|$1%-14s$0|$1%-8s$0|$1%-5s$0|",#SERVERS+1,v.name,v.numpl.."/"..v.maxpl,v.mapnm,rules,v.ver,flg);
+					else
+						printf("$0|$3%-3s$0|$3%-40s$0|$3%-8s$0|$3%-24s$0|$3%-14s$0|$3%-8s$0|$3%-5s$0|",#SERVERS+1,v.name,v.numpl.."/"..v.maxpl,v.mapnm,rules,v.ver,flg);
+					end
+				end
+				if pass then
+					System.AddCCommand(tostring(#SERVERS+1),[[
+						Join(]]..(tostring(#SERVERS+1))..[[,%line);
+					]],"Connects you to "..v.name.." ("..v.ip..":"..v.port.."), password required");
+				else
+					System.AddCCommand(tostring(#SERVERS+1),[[
+						Join(]]..(tostring(#SERVERS+1))..[[);
+					]],"Connects you to "..v.name.." ("..v.ip..":"..v.port..")");
+				end
+				SERVERS[#SERVERS+1]=v;
+			end
+			printf("$0 ");
+			printf("$8Colors: $3available $4not-available $1password required")
+			printf("$8Flags explanations: $3* official, ^ ranked");
+			printf("$8Use $3login $6name/e-mail password$8 to log-in.");
+			printf("$8Use $3info $6ID$8 to see players on the server and other information.");
+			printf("$8Type the $6ID of the server$8 to connect. If server uses password, then use $6ID $3password$8 to connect.");
+		else
+			printf("$4Unable to contact master-server!");
+			printf("$8Retry later.");
 		end
-		printf("$0 ");
-		printf("$8Colors: $3available $4not-available $1password required")
-		printf("$8Flags explanations: $3* official, ^ ranked");
-		printf("$8Use $3login $6name/e-mail password$8 to log-in.");
-		printf("$8Use $3info $6ID$8 to see players on the server and other information.");
-		printf("$8Type the $6ID of the server$8 to connect. If server uses password, then use $6ID $3password$8 to connect.");
-	else
-		printf("$4Unable to contact master-server!");
-		printf("$8Retry later.");
-	end
+	end);
 end
-function GetSvInfo(ip,port,retry)
-	retry=retry or 0;
-	local _,stuff,hdr,err=ConnectHTTP(MASTER_ADDR,urlfmt("/api/lua_sv.php?ip=%s&port=%s",ip,port),"GET",80,true,5,false);
-	if not err then
-		if stuff=="offline" then return false; end
-		local data=pcall(loadstring(stuff));
-		if data then
-			data=dataret();
-			return data[1];
-		else return nil; end
-	else
-		if retry<3 then
-			return GetSvInfo(ip,port,retry+1);
-		end
+function GetSvInfo(ip,port,retry,cb,skip)
+	skip = skip or false
+	if (not UPDATED_SELF) and (not skip) then
+		UpdateSelf(function()
+			GetSvInfo(ip,port,retry,cb,true)
+		end);
+		return;
 	end
-	return false;
+	retry=retry or 0;
+	local _,stuff,hdr,err=SmartHTTP("GET",MASTER_ADDR,urlfmt("/api/lua_sv.php?ip=%s&port=%s",ip,port),function(stuff,err)
+		if not err then
+			if stuff=="offline" then return cb(false); end
+			local data=pcall(loadstring(stuff));
+			if data then
+				data=dataret();
+				return cb(data[1]);
+			else return cb(nil); end
+		else
+			if retry<3 then
+				return GetSvInfo(ip,port,retry+1,cb,true);
+			end
+		end
+		return cb(false);
+	end);
+end
+function CheckSelectedServer(ip,port,mapname)
+	GetSvInfo(ip, port, true, function(sv)
+		if sv and sv.map then
+			if (not hasmap(sv.map)) then
+				if sv.mapdl and sv.mapdl:len()>1 then
+					printf("$3Map is missing, but it is available to download...");
+					printf("$3Downloading the map from $6%s",sv.mapdl:gsub("%%","_"));
+					local ostate=System.GetCVar("r_fullscreen");
+					local res=CPPAPI.DownloadMap(sv.map,sv.mapdl);
+					if not res then
+						printf("$4Failed to download the map!");
+						return;
+					end
+					System.SetCVar("r_fullscreen",ostate);
+				else
+					printf("$4Map missing, checking repo!");
+					if sv.map and (not hasmap(sv.map)) then
+						finddownload(sv.map); 
+					end
+					return;
+				end
+			end
+			if LOGGED_IN then
+				local res=Login(LOG_NAME,LOG_PWD,LOGIN_SECU);
+				if not res then return; end
+			else
+				local adj={"Silent","Loud","Quick","Slow","Lazy","Heavy","Smart","Dark","Bright","Good","Bad"};
+				local noun={"Storm","Box","Globe","Sphere","Man","Guy","Girl","Dog","Gun","Rocket"};
+				--if (not AUTH_UID) and (not AUTH_PROFILE) then
+					AUTH_UID="200000";
+					AUTH_PROFILE=800000+rand(1,199999);
+					AUTH_NAME="Nomad";--adj[rand(1,#adj)]..noun[rand(1,#noun)];
+				--end
+			end
+		else
+			AUTH_ID=nil;
+			AUTH_PROFILE=nil;
+			AUTH_NAME=nil;
+			--if mapname and (not hasmap(mapname)) then
+			--	finddownload(mapname);
+			--end
+			printf("$5Joining non Cry-MP server at %s:%d",ip,port);
+		end
+	end);
 end
 function Login(name,pwd,secu)
 	LOGGED_IN=false;
@@ -348,38 +501,42 @@ function Login(name,pwd,secu)
 		url=urlfmt("/api/login_svc.php?mail=%s&pass=%s",name,pwd);
 		LOGIN_SECU=false;
 	end
-	local _,res,a,err=ConnectHTTP(MASTER_ADDR,url,"GET",80,true,5,false);
-	if not err then
-		if res=="FAIL" then
-			printf("$4Incorrect username or password");
-			return;
-		else
-			AUTH_PROFILE,AUTH_UID,AUTH_NAME=string.match(res,"(%d+),([0-9a-f_]*),([a-zA-Z0-9%$%.%;%:%,%{%}%[%]%(%)%<%>]*)");
-			if AUTH_PROFILE and AUTH_UID and AUTH_NAME then
-				printf("$3Successfully logged in, profile ID: %s",AUTH_PROFILE);
-				LOGGED_IN=true;
-				LOG_NAME=name;
-				LOG_PWD=pwd;
-			else
+	--local _,res,a,err=ConnectHTTP(MASTER_ADDR,url,"GET",80,true,3,false);
+	SmartHTTP("GET",MASTER_ADDR,url,function(res,err)
+		if not err then
+			if res=="FAIL" then
 				printf("$4Incorrect username or password");
-				return false;
+				return;
+			else
+				AUTH_PROFILE,AUTH_UID,AUTH_NAME=string.match(res,"(%d+),([0-9a-f_]*),([a-zA-Z0-9%$%.%;%:%,%{%}%[%]%(%)%<%>]*)");
+				if AUTH_PROFILE and AUTH_UID and AUTH_NAME then
+					printf("$3Successfully logged in, profile ID: %s",AUTH_PROFILE);
+					LOGGED_IN=true;
+					LOG_NAME=name;
+					LOG_PWD=pwd;
+				else
+					printf("$4Incorrect username or password");
+					return false;
+				end
+				return true;
 			end
-			return true;
+			LOGIN_RETRIES=nil;
+		else
+			LOGIN_RETRIES=LOGIN_RETRIES or 0;
+			if LOGIN_RETRIES<=3 then
+				LOGIN_RETRIES=LOGIN_RETRIES+1;
+				printf("$4Failed to contact master-server, error: $6%s",err);
+				printf("$8Retrying %d/3",LOGIN_RETRIES);
+				Login(name,pwd,secu);
+			end
+			return;
 		end
-		LOGIN_RETRIES=nil;
-	else
-		LOGIN_RETRIES=LOGIN_RETRIES or 0;
-		if LOGIN_RETRIES<=3 then
-			LOGIN_RETRIES=LOGIN_RETRIES+1;
-			printf("$4Failed to contact master-server, error: $6%s",err);
-			printf("$8Retrying %d/3",LOGIN_RETRIES);
-			Login(name,pwd,secu);
-		end
-		return;
-	end
+	end);
 end
-function OnShowLoginScreen()
-	System.ExecuteCommand("ConsoleShow 1");
+function OnShowLoginScreen(doNotShow)
+	if not doNotShow then
+		System.ExecuteCommand("ConsoleShow 1");
+	end
 	OnLogin();
 end
 function Join(...)
@@ -394,78 +551,82 @@ function Join(...)
 		return;
 	end
 	
-	local sv=GetSvInfo(SERVERS[id].ip,SERVERS[id].port,0);
-	if sv then
-		printf("$3Successfully checked the server.");
-		SERVERS[id]=sv;
-		local v=sv;
-	else
-		--if sv==false then
-			printf("$4Server is probably offline!");
+	GetSvInfo(SERVERS[id].ip,SERVERS[id].port,0,function(sv)
+		if sv then
+			printf("$3Successfully checked the server.");
+			SERVERS[id]=sv;
+			local v=sv;
+		else
+			--if sv==false then
+				printf("$4Server is probably offline!");
+				return;
+			--else	
+			--	sv=SERVERS[id]
+			--end
+		end
+		if tonumber(sv.ver)~=GAME_VER then
+			local info=tonumber(sv.ver)==5767 and "unpatched" or "patched";
+			local have=tonumber(GAME_VER)==5767 and "unpatched" or "patched";
+			printf("$4This server is running $8%s version (%d)$4, you are using $8%s version (%d)$4.",info,tonumber(sv.ver),have,tonumber(GAME_VER));
+			if tonumber(sv.ver)>tonumber(GAME_VER) then
+				printf("$8Mind updating your game? Search for $6\"Crysis 1.2\" & \"Crysis 1.2.1\"$8 patch");
+			end
 			return;
-		--else	
-		--	sv=SERVERS[id]
-		--end
-	end
-	if tonumber(sv.ver)~=GAME_VER then
-		local info=tonumber(sv.ver)==5767 and "unpatched" or "patched";
-		local have=tonumber(GAME_VER)==5767 and "unpatched" or "patched";
-		printf("$4This server is running $8%s version (%d)$4, you are using $8%s version (%d)$4.",info,tonumber(sv.ver),have,tonumber(GAME_VER));
-		if tonumber(sv.ver)>tonumber(GAME_VER) then
-			printf("$8Mind updating your game? Search for $6\"Crysis 1.2\" & \"Crysis 1.2.1\"$8 patch");
 		end
-		return;
-	end
-	if sv.pass~="0" and (not pwd) then
-		printf("$3This server is password protected, please enter valid password");
-		return;
-	end
-	if (pwd) then
-		System.ExecuteCommand("sv_password "..pwd);
-		System.SetCVar("sv_password",pwd);
-		CPPAPI.FSetCVar("sv_password",pwd);
-		PWDSET=true;
-	else
-		AUTH_PWD=nil;
-		if PWDSET then
-			System.ExecuteCommand("sv_password 0");
-			System.SetCVar("sv_password","0");
-			CPPAPI.FSetCVar("sv_password","");
-			PWDSET=false;
+		if sv.pass~="0" and (not pwd) then
+			printf("$3This server is password protected, please enter valid password");
+			return;
 		end
-	end
-	if LOGGED_IN then
-		local res=Login(LOG_NAME,LOG_PWD,LOGIN_SECU);
-		if not res then return; end
-	else
-		local adj={"Silent","Loud","Quick","Slow","Lazy","Heavy","Smart","Dark","Bright","Good","Bad"};
-		local noun={"Storm","Box","Globe","Sphere","Man","Guy","Girl","Dog","Gun","Rocket"};
-		--if (not AUTH_UID) and (not AUTH_PROFILE) then
-			AUTH_UID="200000";
-			AUTH_PROFILE=800000+rand(1,199999);
-			AUTH_NAME="Nomad";--adj[rand(1,#adj)]..noun[rand(1,#noun)];
-		--end
-	end
-	--printf("$3Joining $6%s$3 ($5%s$8:$5%d$3) as $6%s",sv.name,sv.ip,tonumber(sv.port),AUTH_NAME);
-	local ip=sv.ip..":"..sv.port;
-	if (not hasmap(sv.map)) then
-		if sv.mapdl and sv.mapdl:len()>1 then
-			printf("$3Map is missing, but it is available to download...");
-			printf("$3Downloading the map from $6%s",sv.mapdl:gsub("%%","_"));
-			local ostate=System.GetCVar("r_fullscreen");
-			local res=CPPAPI.DownloadMap(sv.map,sv.mapdl);
-			if not res then
-				printf("$4Failed to download the map!");
+		if (pwd) then
+			System.ExecuteCommand("sv_password "..pwd);
+			System.SetCVar("sv_password",pwd);
+			CPPAPI.FSetCVar("sv_password",pwd);
+			PWDSET=true;
+		else
+			AUTH_PWD=nil;
+			if PWDSET then
+				System.ExecuteCommand("sv_password 0");
+				System.SetCVar("sv_password","0");
+				CPPAPI.FSetCVar("sv_password","");
+				PWDSET=false;
+			end
+		end
+		if LOGGED_IN then
+			local res=Login(LOG_NAME,LOG_PWD,LOGIN_SECU);
+			if not res then return; end
+		else
+			local adj={"Silent","Loud","Quick","Slow","Lazy","Heavy","Smart","Dark","Bright","Good","Bad"};
+			local noun={"Storm","Box","Globe","Sphere","Man","Guy","Girl","Dog","Gun","Rocket"};
+			--if (not AUTH_UID) and (not AUTH_PROFILE) then
+				AUTH_UID="200000";
+				AUTH_PROFILE=800000+rand(1,199999);
+				AUTH_NAME="Nomad";--adj[rand(1,#adj)]..noun[rand(1,#noun)];
+			--end
+		end
+		--printf("$3Joining $6%s$3 ($5%s$8:$5%d$3) as $6%s",sv.name,sv.ip,tonumber(sv.port),AUTH_NAME);
+		local ip=sv.ip..":"..sv.port;
+		if (not hasmap(sv.map)) then
+			if sv.mapdl and sv.mapdl:len()>1 then
+				printf("$3Map is missing, but it is available to download...");
+				printf("$3Downloading the map from $6%s",sv.mapdl:gsub("%%","_"));
+				local ostate=System.GetCVar("r_fullscreen");
+				local res=CPPAPI.DownloadMap(sv.map,sv.mapdl);
+				if not res then
+					printf("$4Failed to download the map!");
+					return;
+				end
+				System.SetCVar("r_fullscreen",ostate);
+			else
+				printf("$4Map missing, checking repo!");
+				if sv.map and (not hasmap(sv.map)) then
+					finddownload(sv.map);
+				end
 				return;
 			end
-			System.SetCVar("r_fullscreen",ostate);
-		else
-			printf("$4Map missing and isnt available to download!");
-			return;
 		end
-	end
-	FROM_SVLIST=sv;
-	AuthConn(ip);
+		FROM_SVLIST=sv;
+		AuthConn(ip);
+	end);
 end
 function SvInfo(idx)
 	if not idx then
@@ -482,26 +643,30 @@ function SvInfo(idx)
 		printf("$4Server doesn't exist");
 		return;
 	end
-	local _,c,hdr,err=ConnectHTTP(MASTER_ADDR,urlfmt("/api/lua_svinfo.php?ip=%s&port=%d",sv.ip,sv.port));
-	if err then
-		printf("$4Failed to contact master!");
-		return;
-	end
-	local data=assert(loadstring(c))();
-	data=inforet();
-	if data then
-		printf("$1----------------------------------------------------------");
-		printf("$8Name: $6%s",data.name);
-		printf("$8Map: $6%s",data.map);
-		printf("$8Time left: $6%s",data.timel);
-		printf("$8Players: $6%s/%s",data.numpl,data.maxpl);
-		if data.players and #data.players>0 then
-			printf("$8%-26s%-7s%-7s","Name","Kills","Deaths");
-			for i,v in pairs(data.players) do
-				printf("$3%-26s$6%-7s$3%-7s",v.name:gsub("[$][0-9o]",""),v.kills,v.deaths);
+	SmartHTTP("GET",MASTER_ADDR,urlfmt("/api/lua_svinfo.php?ip=%s&port=%d",sv.ip,sv.port),function(c,err)
+		if err then
+			printf("$4Failed to contact master!");
+			return;
+		end
+		local data=assert(loadstring(c))();
+		data=inforet();
+		if data then
+			printf("$1----------------------------------------------------------");
+			printf("$8Name: $6%s",data.name);
+			if data.desc and data.desc:len()>0 then
+				printf("$8Description: $6%s",data.desc);
+			end
+			printf("$8Map: $6%s",data.map);
+			printf("$8Time left: $6%s",data.timel);
+			printf("$8Players: $6%s/%s",data.numpl,data.maxpl);
+			if data.players and #data.players>0 then
+				printf("$8%-26s%-7s%-7s","Name","Kills","Deaths");
+				for i,v in pairs(data.players) do
+					printf("$3%-26s$6%-7s$3%-7s",v.name:gsub("[$][0-9o]",""),v.kills,v.deaths);
+				end
 			end
 		end
-	end
+	end);
 end
 
 function SimpleLogin(a,b) return Login(a,b,false); end
@@ -583,9 +748,64 @@ end
 function hasmap(name)
 	return CPPAPI.MapAvailable(name);
 end
+function finddownload(name)
+	local _,content,hdr,err=ConnectHTTP(MASTER_ADDR,urlfmt("/api/repo.php?map=%s",name),"GET",80,true,3)
+	if not err then
+		local link = content;
+		if link == "none" then
+			printf("$4Failed to find %s map-download link in repo : no known download link",name);
+		else
+			local version,url=string.match(link,"(.-);(.*)");
+			if url:sub(1,4)~="http" then url="http://"..url; end
+			printf("$3Found download link for map version %s in repo: %s",version,url);
+			local fname=name
+			if version~="-1" then
+				fname=name.."|"..version
+			end
+			if not hasmap(fname) then
+				printf("$3Map download URL found, updating map...");
+				local res=CPPAPI.DownloadMap(name,url);
+				if not res then
+					printf("$4Failed to download the map!");
+					return;
+				end
+			end
+		end
+	else printf("$3Failed to find map-download link at repository: %s",err); end
+end
 
 
 function saye(m)
 	g_gameRules.game:SendChatMessage(ChatToTarget,g_localActor.id,g_localActor.id,tostring(m));
-end
+end 
+
 System.AddCCommand("say","saye(%line)","Bindable say to chat");
+System.AddCCommand("mapdl","finddownload(%line)","Look up in repo for map download, example usage: mapdl multiplayer/ia/pure");
+
+UpdateSelf()
+
+socket = { fd=0; }
+function socket:new(tcp)
+	if tcp == nil then tcp = false; end
+	local sock={ fd = Socket.socket(tcp) };
+	setmetatable(sock,self);
+	self.__index=self;
+	return sock;
+end
+function socket:connect(host, port)
+	return Socket.connect(self.fd, host, tonumber(port));
+end
+function socket:send(buffer, len)
+	if not len then len = buffer:len(); end
+	return Socket.send(self.fd, buffer, tonumber(len));
+end
+function socket:recv(len)
+	len = len or 1024*1024;
+	return Socket.recv(self.fd, tonumber(len));
+end
+function socket:error()
+	return Socket.error();
+end
+function socket:close()
+	return Socket.connect(self.fd);
+end

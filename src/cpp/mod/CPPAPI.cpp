@@ -5,12 +5,20 @@
 #include <IVehicleSystem.h>
 #include <IGameObjectSystem.h>
 #include <CryThread.h>
+#include <IScriptSystem.h>
+//#include <mutex>
+//#include <functional>
 
 #pragma region CPPAPI
 
-static HANDLE gEvent;
+extern AsyncData *asyncQueue[MAX_ASYNC_QUEUE];
+extern int asyncQueueIdx;
+extern std::map<std::string, std::string> asyncRetVal;
+extern IScriptSystem *pScriptSystem;
 
-extern void ToggleLoading(const char *text,bool loading);
+HANDLE gEvent;
+
+extern void ToggleLoading(const char *text,bool loading,bool reset);
 
 CPPAPI::CPPAPI(ISystem *pSystem, IGameFramework *pGameFramework)
 	:	m_pSystem(pSystem),
@@ -45,6 +53,7 @@ void CPPAPI::RegisterMethods(){
 	SCRIPT_REG_TEMPLFUNC(ApplyMaskOne,"ent,mask,apply");
 	SCRIPT_REG_TEMPLFUNC(AsyncConnectWebsite,"host, page, port, http11, timeout, methodGet");
 	SCRIPT_REG_TEMPLFUNC(MsgBox,"text,title,mask");
+	SCRIPT_REG_TEMPLFUNC(DoAsyncChecks, "");
 }
 int CPPAPI::FSetCVar(IFunctionHandler* pH,const char * cvar,const char *val){
 #ifdef IS6156DLL
@@ -99,6 +108,26 @@ int CPPAPI::GetMapName(IFunctionHandler *pH){
 #else
 	return pH->EndFunction(pGameFramework->GetLevelName());
 #endif
+}
+int CPPAPI::DoAsyncChecks(IFunctionHandler *pH) {
+	IScriptTable *tbl = pScriptSystem->CreateTable();
+	tbl->AddRef();
+	std::vector<IScriptTable*> refs;
+	//commonMutex.lock();
+	for (std::map<std::string, std::string>::iterator it = asyncRetVal.begin(); it != asyncRetVal.end(); it++) {
+		IScriptTable *item = pScriptSystem->CreateTable();
+		item->AddRef();
+		item->PushBack(it->first.c_str());
+		item->PushBack(it->second.c_str());
+		tbl->PushBack(item);
+		refs.push_back(item);
+	}
+	int code = pH->EndFunction(tbl);
+	for (auto& it : refs) {
+		SAFE_RELEASE(it);
+	}
+	SAFE_RELEASE(tbl);
+	return code;
 }
 int CPPAPI::MapAvailable(IFunctionHandler *pH,const char *_path){
 	char *ver=0;
@@ -204,7 +233,7 @@ bool DownloadMapFromObject(DownloadMapStruct *now) {
 	ShowWindow(hwnd, SW_MAXIMIZE);
 	return ret;
 }
-bool AsyncDownloadMap(int id){
+bool AsyncDownloadMap(int id,AsyncData *obj){
 	GetAsyncObj(DownloadMapStruct,now);
 	if(now){
 		now->success=DownloadMapFromObject(now);
@@ -278,25 +307,28 @@ int CPPAPI::MsgBox(IFunctionHandler* pH,const char *text,const char *title,int b
 	return pH->EndFunction();
 }
 #pragma endregion
-void AsyncConnect(int id){
+void AsyncConnect(int id, AsyncData *obj){
 	GetAsyncObj(ConnectStruct,now);
-	std::string content="Error: Unknown error";
+	std::string content="\\\\Error: Unknown error";
 	if(now)
 		content=Network::Connect(now->host,now->page,now->method,now->http,now->port,now->timeout,now->alive);
-	AsyncReturn(content.c_str());
+	if (content.length() > 2) {
+		if (content[0] == 0xFE && content[1] == 0xFF) content = content.substr(2);
+	}
+	obj->ret(content);
 }
 int CPPAPI::AsyncConnectWebsite(IFunctionHandler* pH,char * host,char * page,int port,bool http11,int timeout,bool methodGet,bool alive){
 	using namespace Network; 
 	ConnectStruct *now=new ConnectStruct;
-	if(now){
-		now->host=host;
-		now->page=page;
-		now->method=methodGet?INetGet:INetPost;
-		now->http=http11?INetHTTP11:INetHTTP10;
-		now->port=port;
-		now->timeout=timeout;
-		now->alive=alive;
-		CreateAsyncCallLua(AsyncConnect,now);
+	if (now) {
+		now->host = host;
+		now->page = page;
+		now->method = methodGet ? INetGet : INetPost;
+		now->http = http11 ? INetHTTP11 : INetHTTP10;
+		now->port = port;
+		now->timeout = timeout;
+		now->alive = alive;
+		return now->callAsync(pH);
 	}
 	return pH->EndFunction();
 }
@@ -308,27 +340,27 @@ static void AsyncThread(){
 		WaitForSingleObject(gEvent,INFINITE);
 		if(asyncQueue){
 			for(int i=0;i<MAX_ASYNC_QUEUE;i++){
+				//commonMutex.lock();
 				AsyncData *obj=asyncQueue[i];
+				//commonMutex.unlock();
 				if(obj && !obj->finished){
-					if(obj->func){
-						AsyncFuncType func=(AsyncFuncType)obj->func;
-						func(obj->id);
-						obj->finished=true;
-						try{
-							delete obj;
-						} catch(std::exception& ex){
-							printf("Unhandled exception: %s",ex.what());
-						}
-						asyncQueue[i]=0;
+					try {
+						//MessageBoxA(0, "Executing", 0, 0);
+						obj->executing = true;
+						obj->exec();
+					} catch (std::exception& ex) {
+						printf("func/Unhandled exception: %s\n", ex.what());
 					}
+					obj->finished=true;
 				}
 			}
-			GetClosestFreeItem(asyncQueue,&asyncQueueIdx);
+			//GetClosestFreeItem(asyncQueue,&asyncQueueIdx);
 		}
 		ResetEvent(gEvent);
 	}
 }
 void GetClosestFreeItem(AsyncData **in,int *out){
+	/*
 	*out=0;
 	if(in){
 		if(!in[0]){
@@ -341,6 +373,11 @@ void GetClosestFreeItem(AsyncData **in,int *out){
 			}
 		}
 	}
+	*/
+	static int idx = 0;
+	idx++;
+	idx %= MAX_ASYNC_QUEUE;
+	*out = idx;
 }
 #pragma endregion
 #endif

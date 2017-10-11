@@ -5,13 +5,15 @@
 #include <string.h>
 #include <limits.h>
 #include <sstream>
+//#include <mutex>
 
 #define CLIENT_BUILD 1001
+//#define AUTO_UPDATE
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-
+//std::mutex commonMutex;
 #ifdef USE_SDK
 	typedef unsigned int uint;
 	#include <IGameFramework.h>
@@ -35,6 +37,9 @@
 	IScriptSystem *pScriptSystem=0;
 	IGameFramework *pGameFramework=0;
 	IFlashPlayer *pFlashPlayer=0;
+	AsyncData *asyncQueue[MAX_ASYNC_QUEUE];
+	std::map<std::string, std::string> asyncRetVal;
+	int asyncQueueIdx = 0;
 #endif
 
 #define getField(type,base,offset) (*(type*)(((unsigned char*)base)+offset))
@@ -68,10 +73,11 @@ PFNGU pGameUpdate = 0;
 void *m_ui;
 char SvMaster[255]="m.crymp.net";
 
-void ToggleLoading(const char *text,bool loading=true);
+void ToggleLoading(const char *text,bool loading=true,bool reset=true);
 void OnUpdate(float frameTime);
 
 #ifdef USE_SDK
+
 void CommandClMaster(IConsoleCmdArgs *pArgs){
 	if (pArgs->GetArgCount()>1)
 	{
@@ -84,7 +90,7 @@ void CommandClMaster(IConsoleCmdArgs *pArgs){
 	pScriptSystem->PushFuncParam("%s");
 	pScriptSystem->PushFuncParam(buff);
 	pScriptSystem->EndCall();
-
+	
 	//ToggleLoading("Setting master",true);
 }
 void CommandRldMaps(IConsoleCmdArgs *pArgs){
@@ -152,10 +158,11 @@ IFlashPlayer *GetFlashPlayer(int offset=0, int pos=-1) {
 	return 0;
 }
 
-void ToggleLoading(const char *text,bool loading){
+void ToggleLoading(const char *text,bool loading,bool reset){
 	pFlashPlayer = GetFlashPlayer();
 	if (pFlashPlayer) {
-		pFlashPlayer->Invoke1("showLOADING", loading);
+		if(reset)
+			pFlashPlayer->Invoke1("showLOADING", loading);
 		if (loading) {
 			SFlashVarValue args[] = { text,false };
 			pFlashPlayer->Invoke("setLOADINGText", args, sizeof(args) / sizeof(args[0]));
@@ -271,7 +278,38 @@ int OnImpulse( const EventPhys *pEvent ){
 #endif
 
 void OnUpdate(float frameTime) {
-	//MessageBoxA(0, "Update", 0, 0);
+	for (int i = 0; i < MAX_ASYNC_QUEUE; i++) {
+		///commonMutex.lock();
+		AsyncData *obj = asyncQueue[i];
+		///commonMutex.unlock();
+		if (obj) {
+			if (obj->finished) {
+				try {
+					obj->postExec();
+				} catch (std::exception& ex) {
+					printf("postfn/Unhandled exception: %s", ex.what());
+				}
+				try {
+					delete obj;
+				} catch (std::exception& ex) {
+					printf("delete/Unhandled exception: %s", ex.what());
+				}
+				//commonMutex.lock();
+				asyncQueue[i] = 0;
+				//commonMutex.unlock();
+			} else if (obj->executing) {
+				try {
+					obj->onUpdate();
+				} catch (std::exception& ex) {
+					printf("progress_func/Unhandled exception: %s", ex.what());
+				}
+			}
+		}
+	}
+	IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
+	pScriptSystem->BeginCall("OnUpdate");
+	pScriptSystem->PushFuncParam(frameTime);
+	pScriptSystem->EndCall();
 }
 
 extern "C" {
@@ -368,6 +406,7 @@ extern "C" {
 	}
 	__declspec(dllexport) void* CreateGame(void* ptr){
 
+#ifdef AUTO_UPDATE
 		bool needsUpdate = false;
 		std::string newestVersion = fastDownload(
 			(
@@ -383,6 +422,7 @@ extern "C" {
 				return 0;
 			}
 		}
+#endif
 		typedef void* (*PFNCREATEGAME)(void*);
 		int version=getGameVer(".\\.\\.\\Bin32\\CryGame.dll");
 #ifdef IS64
