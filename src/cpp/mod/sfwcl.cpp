@@ -348,8 +348,8 @@ extern "C" {
 				pGetSelectedServer=(PFNGSS)0x39320D60;
 				hook((void*)pGetSelectedServer,(void*)GetSelectedServer);
 
-				//pDisconnectError=(PFNDE)0x39315EB0;
-				//hook((void*)pDisconnectError,(void*)DisconnectError);
+				pDisconnectError=(PFNDE)0x39315EB0; 
+				hook((void*)pDisconnectError,(void*)DisconnectError);
 				break;
 			case 6729:
 				fillNOP((void*)0x3968B0B9,6);
