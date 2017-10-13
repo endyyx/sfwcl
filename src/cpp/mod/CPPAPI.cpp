@@ -123,9 +123,15 @@ int CPPAPI::DoAsyncChecks(IFunctionHandler *pH) {
 		refs.push_back(item);
 	}
 	int code = pH->EndFunction(tbl);
+#ifdef OLD_MSVC_DETECTED
+	for (size_t i = 0; i < refs.size(); i++ ) {
+		SAFE_RELEASE(refs[i]);
+	}
+#else
 	for (auto& it : refs) {
 		SAFE_RELEASE(it);
 	}
+#endif
 	SAFE_RELEASE(tbl);
 	return code;
 }
