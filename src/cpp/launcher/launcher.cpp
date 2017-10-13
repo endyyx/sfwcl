@@ -1,3 +1,4 @@
+#define UNICODE
 #include <Windows.h>
 #include <stdio.h>
 #include <string.h>
@@ -6,9 +7,6 @@
 #include <fstream>
 #include <string>
 #include <direct.h>
-#ifdef _MSC_VER
-#define _CRT_SECURE_NO_WARNINGS
-#endif
 #pragma comment(lib,"Ws2_32")
 #pragma comment(lib,"urlmon")
 using namespace std;
