@@ -203,27 +203,31 @@ bool __fastcall GetSelectedServer(void *self, void *addr, SServerInfo& server){
 	unhook(pGetSelectedServer);
 	bool result=pGetSelectedServer(self,addr,server);
 	hook(pGetSelectedServer,GetSelectedServer);
-	if(checkFollowing){
-		char ip[30];
-		int iIp=server.m_publicIP;
-		#ifdef IS64
-		#define IPOFFSET 0x30
-		#define PORTOFFSET 0x34
-		//MemScan(&server,sizeof(server));
-		#else
-		#define IPOFFSET 0x14
-		#define PORTOFFSET 0x18
-		#endif
-		if(GAME_VER==5767)
-			iIp=getField(int,&server,IPOFFSET);
-		sprintf(ip,"%d.%d.%d.%d",(iIp)&0xFF,(iIp>>8)&0xFF,(iIp>>16)&0xFF,(iIp>>24)&0xFF);
+	if (checkFollowing) {
+		char sz_ip[30];
+		int ip = server.m_publicIP;
+		int port = server.m_publicPort;
+#ifdef IS64
+		if (GAME_VER == 6156) {
+			ip = getField(int, &server, 0x80);
+			port = (int)getField(unsigned short, &server, 0x84);
+		} else if (GAME_VER == 5767) {
+			ip = getField(int, &server, 0x30);
+			port = (int)getField(unsigned short, &server, 0x34);
+		}
+#else
+		if (GAME_VER == 5767) {
+			ip = (int)getField(int, &server, 0x14);
+			port = (int)getField(int, &server, 0x18);
+		}
+#endif
+		//MemScan(&server, 256);
+		sprintf(sz_ip,"%d.%d.%d.%d",(ip)&0xFF,(ip>>8)&0xFF,(ip>>16)&0xFF,(ip>>24)&0xFF);
 		//ToggleLoading("Checking server",true);
 		IScriptSystem *pScriptSystem=pSystem->GetIScriptSystem();
 		pScriptSystem->BeginCall("CheckSelectedServer");
-		pScriptSystem->PushFuncParam(ip);
-		if(GAME_VER==6156)
-			pScriptSystem->PushFuncParam(server.m_publicPort);
-		else pScriptSystem->PushFuncParam((int)(getField(unsigned short,&server,PORTOFFSET)));
+		pScriptSystem->PushFuncParam(sz_ip);
+		pScriptSystem->PushFuncParam(port);
 		if(GAME_VER==6156)
 			pScriptSystem->PushFuncParam("<unknown map>");
 		pScriptSystem->EndCall();
@@ -331,6 +335,14 @@ extern "C" {
 			case 6156:
 				fillNOP((void*)0x39689899,6);
 				fillNOP((void*)0x396898A8,6);
+				pGameGlobal = (GAME_32_6156*)0x3941C858;
+				pGetMenu = (PFNGM)0x390BB910;
+				pGetMenuScreen = (PFNGMS)0x392F04B0;
+				pMenuIsLoaded = (PFNMIL)0x39340220;
+
+				pGameUpdate = (PFNGU)0x390BB5F0;
+				hook((void*)pGameUpdate, (void*)GameUpdate);
+
 				pShowLoginScreen=(PFNSHLS)0x393126B0;
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
 
@@ -340,8 +352,8 @@ extern "C" {
 				pGetSelectedServer=(PFNGSS)0x39320D60;
 				hook((void*)pGetSelectedServer,(void*)GetSelectedServer);
 
-				//pDisconnectError=(PFNDE)0x39315EB0;
-				//hook((void*)pDisconnectError,(void*)DisconnectError);
+				pDisconnectError=(PFNDE)0x39315EB0; 
+				hook((void*)pDisconnectError,(void*)DisconnectError);
 				break;
 			case 6729:
 				fillNOP((void*)0x3968B0B9,6);
