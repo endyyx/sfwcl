@@ -331,6 +331,14 @@ extern "C" {
 			case 6156:
 				fillNOP((void*)0x39689899,6);
 				fillNOP((void*)0x396898A8,6);
+				pGameGlobal = (GAME_32_6156*)0x3941C858;
+				pGetMenu = (PFNGM)0x390BB910;
+				pGetMenuScreen = (PFNGMS)0x392F04B0;
+				pMenuIsLoaded = (PFNMIL)0x39340220;
+
+				pGameUpdate = (PFNGU)0x390BB5F0;
+				hook((void*)pGameUpdate, (void*)GameUpdate);
+
 				pShowLoginScreen=(PFNSHLS)0x393126B0;
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
 
