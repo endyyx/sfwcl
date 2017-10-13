@@ -1,7 +1,17 @@
 cmake_minimum_required(VERSION 3.2)
-set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Type of build")
+
+if(NOT CMAKE_BUILD_TYPE)
+	set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Type of build")
+endif()
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
+
+# force static link of MSVC runtime by overriding compiler flags
+# https://cmake.org/Wiki/CMake_FAQ#How_can_I_build_my_MSVC_application_with_a_static_runtime.3F
+set(CMAKE_USER_MAKE_RULES_OVERRIDE ${CMAKE_CURRENT_SOURCE_DIR}/cmake/msvc_c_flags_override.cmake)
+set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX ${CMAKE_CURRENT_SOURCE_DIR}/cmake/msvc_cxx_flags_override.cmake)
+
 project(sfwcl)
+
 # install target is not used here
 set(CMAKE_INSTALL_PREFIX "${PROJECT_BINARY_DIR}" CACHE INTERNAL "")
 
@@ -30,19 +40,22 @@ endif()
 
 option(SFWCL_MAPDL "Build MapDownloader.exe" OFF)
 if(SFWCL_MAPDL)
-	set(ZLIB_ROOT "" CACHE PATH "Directory containing zlib")
-	find_package(ZLIB REQUIRED)
-	if(ZLIB_FOUND)
-		find_library(ZLIB_STATIC zlibstatic PATHS "${ZLIB_ROOT}")
-		include_directories("${ZLIB_INCLUDE_DIRS}" "${ZLIB_ROOT}/contrib/minizip")
-		add_library(miniunz STATIC
-			"${ZLIB_ROOT}/contrib/minizip/unzip.c"
-			"${ZLIB_ROOT}/contrib/minizip/ioapi.c"
-			"${ZLIB_ROOT}/contrib/minizip/iowin32.c"
-		)
-		add_executable(MapDownloader src/cpp/mapdl/mapdl.cpp)
-		target_link_libraries(MapDownloader miniunz "${ZLIB_STATIC}")
-	endif()
+	add_executable(MapDownloader src/cpp/mapdl/mapdl.cpp)
+	# hide not needed options of zlib
+	mark_as_advanced(FORCE ASM686 AMD64 INSTALL_BIN_DIR INSTALL_LIB_DIR INSTALL_INC_DIR INSTALL_MAN_DIR INSTALL_PKGCONFIG_DIR)
+	add_subdirectory("${PROJECT_SOURCE_DIR}/lib/zlib" EXCLUDE_FROM_ALL)
+	add_library(miniunz STATIC
+		"${PROJECT_SOURCE_DIR}/lib/zlib/contrib/minizip/unzip.c"
+		"${PROJECT_SOURCE_DIR}/lib/zlib/contrib/minizip/ioapi.c"
+		"${PROJECT_SOURCE_DIR}/lib/zlib/contrib/minizip/iowin32.c"
+	)
+	target_include_directories(miniunz PUBLIC
+		"${PROJECT_SOURCE_DIR}/lib/zlib/contrib/minizip"
+		"${PROJECT_SOURCE_DIR}/lib/zlib"
+		"${PROJECT_BINARY_DIR}/lib/zlib"
+	)
+	target_link_libraries(miniunz zlibstatic)
+	target_link_libraries(MapDownloader miniunz)
 endif()
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
@@ -54,9 +67,9 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 	endif()
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 	message(STATUS "Using GNU compiler options")
-	option(SFWCL_MINGW_STATIC "Link with -static-libstdc++ -static-libgcc" ON)
+	set(SFWCL_MINGW_STATIC_FLAGS "-static-libstdc++ -static-libgcc")
+	option(SFWCL_MINGW_STATIC "Link with ${SFWCL_MINGW_STATIC_FLAGS}" ON)
 	if(SFWCL_MINGW_STATIC)
-		set(SFWCL_MINGW_STATIC_FLAGS "-static-libstdc++ -static-libgcc")
 		list(APPEND CMAKE_EXE_LINKER_FLAGS ${SFWCL_MINGW_STATIC_FLAGS})
 		list(APPEND CMAKE_SHARED_LINKER_FLAGS ${SFWCL_MINGW_STATIC_FLAGS})
 		list(APPEND CMAKE_MODULE_LINKER_FLAGS ${SFWCL_MINGW_STATIC_FLAGS})
