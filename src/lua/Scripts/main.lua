@@ -119,7 +119,7 @@ AsyncAwait={};
 function OnUpdate(frameTime)
 	if CPPAPI then
 		local ret=CPPAPI.DoAsyncChecks();
-		if ret and #ret>0 then
+		if ret and type(ret)=="table" and #ret>0 then
 			for i,v in pairs(ret) do
 				_G[v[1]]=v[2];
 				--printf("_G['%s']='%s'",v[1],v[2]);
@@ -592,7 +592,7 @@ function CheckSelectedServer(ip,port,mapname)
 		end
 	end);
 end
-function Login(name,pwd,secu)
+function Login(name,pwd,secu,callback)
 	LOGGED_IN=false;
 	LOG_NAME=nil;
 	LOG_PWD=nil;
@@ -609,6 +609,7 @@ function Login(name,pwd,secu)
 		if not err then
 			if res=="FAIL" then
 				printf("$4Incorrect username or password");
+				if callback then callback(nil); end
 				return;
 			else
 				AUTH_PROFILE,AUTH_UID,AUTH_NAME=string.match(res,"(%d+),([0-9a-f_]*),([a-zA-Z0-9%$%.%;%:%,%{%}%[%]%(%)%<%>]*)");
@@ -619,8 +620,10 @@ function Login(name,pwd,secu)
 					LOG_PWD=pwd;
 				else
 					printf("$4Incorrect username or password");
+					if callback then callback(false); end
 					return false;
 				end
+				if callback then callback(true); end
 				return true;
 			end
 			LOGIN_RETRIES=nil;
@@ -630,7 +633,7 @@ function Login(name,pwd,secu)
 				LOGIN_RETRIES=LOGIN_RETRIES+1;
 				printf("$4Failed to contact master-server, error: $6%s",err);
 				printf("$8Retrying %d/3",LOGIN_RETRIES);
-				Login(name,pwd,secu);
+				Login(name,pwd,secu,callback);
 			end
 			return;
 		end
@@ -694,8 +697,35 @@ function Join(...)
 				PWDSET=false;
 			end
 		end
+		
+		local callback = function()
+			local ip=sv.ip..":"..sv.port;
+			if (not hasmap(sv.map)) then
+				if sv.mapdl and sv.mapdl:len()>1 then
+					printf("$3Map is missing, but it is available to download...");
+					printf("$3Downloading the map from $6%s",sv.mapdl:gsub("%%","_"));
+					local ostate=System.GetCVar("r_fullscreen");
+					local res=CPPAPI.DownloadMap(sv.map,sv.mapdl);
+					if not res then
+						printf("$4Failed to download the map!");
+						return;
+					end
+					System.SetCVar("r_fullscreen",ostate);
+				else
+					printf("$4Map missing, checking repo!");
+					if sv.map and (not hasmap(sv.map)) then
+						finddownload(sv.map);
+					end
+					return;
+				end
+			end
+			FROM_SVLIST=sv;
+			AuthConn(ip);
+		end
+		
+		
 		if LOGGED_IN then
-			local res=Login(LOG_NAME,LOG_PWD,LOGIN_SECU);
+			local res=Login(LOG_NAME,LOG_PWD,LOGIN_SECU,callback);
 			if not res then return; end
 		else
 			local adj={"Silent","Loud","Quick","Slow","Lazy","Heavy","Smart","Dark","Bright","Good","Bad"};
@@ -705,30 +735,10 @@ function Join(...)
 				AUTH_PROFILE=800000+rand(1,199999);
 				AUTH_NAME="Nomad";--adj[rand(1,#adj)]..noun[rand(1,#noun)];
 			--end
+			callback()
 		end
 		--printf("$3Joining $6%s$3 ($5%s$8:$5%d$3) as $6%s",sv.name,sv.ip,tonumber(sv.port),AUTH_NAME);
-		local ip=sv.ip..":"..sv.port;
-		if (not hasmap(sv.map)) then
-			if sv.mapdl and sv.mapdl:len()>1 then
-				printf("$3Map is missing, but it is available to download...");
-				printf("$3Downloading the map from $6%s",sv.mapdl:gsub("%%","_"));
-				local ostate=System.GetCVar("r_fullscreen");
-				local res=CPPAPI.DownloadMap(sv.map,sv.mapdl);
-				if not res then
-					printf("$4Failed to download the map!");
-					return;
-				end
-				System.SetCVar("r_fullscreen",ostate);
-			else
-				printf("$4Map missing, checking repo!");
-				if sv.map and (not hasmap(sv.map)) then
-					finddownload(sv.map);
-				end
-				return;
-			end
-		end
-		FROM_SVLIST=sv;
-		AuthConn(ip);
+		
 	end);
 end
 function SvInfo(idx)

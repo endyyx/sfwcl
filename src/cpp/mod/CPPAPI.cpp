@@ -110,10 +110,13 @@ int CPPAPI::GetMapName(IFunctionHandler *pH){
 #endif
 }
 int CPPAPI::DoAsyncChecks(IFunctionHandler *pH) {
+#ifdef DO_ASYNC_CHECKS
+	extern Mutex g_mutex;
 	IScriptTable *tbl = pScriptSystem->CreateTable();
 	tbl->AddRef();
 	std::vector<IScriptTable*> refs;
 	//commonMutex.lock();
+	g_mutex.Lock();
 	for (std::map<std::string, std::string>::iterator it = asyncRetVal.begin(); it != asyncRetVal.end(); it++) {
 		IScriptTable *item = pScriptSystem->CreateTable();
 		item->AddRef();
@@ -122,12 +125,16 @@ int CPPAPI::DoAsyncChecks(IFunctionHandler *pH) {
 		tbl->PushBack(item);
 		refs.push_back(item);
 	}
+	g_mutex.Unlock();
 	int code = pH->EndFunction(tbl);
 	for (auto& it : refs) {
 		SAFE_RELEASE(it);
 	}
 	SAFE_RELEASE(tbl);
 	return code;
+#else
+	return pH->EndFunction(0);
+#endif
 }
 int CPPAPI::MapAvailable(IFunctionHandler *pH,const char *_path){
 	char *ver=0;
@@ -336,44 +343,31 @@ int CPPAPI::AsyncConnectWebsite(IFunctionHandler* pH,char * host,char * page,int
 
 #pragma region AsyncStuff
 static void AsyncThread(){
+	extern Mutex g_mutex;
 	while(true){
 		WaitForSingleObject(gEvent,INFINITE);
 		if(asyncQueue){
 			for(int i=0;i<MAX_ASYNC_QUEUE;i++){
-				//commonMutex.lock();
+				g_mutex.Lock();
 				AsyncData *obj=asyncQueue[i];
-				//commonMutex.unlock();
 				if(obj && !obj->finished){
 					try {
-						//MessageBoxA(0, "Executing", 0, 0);
 						obj->executing = true;
+						g_mutex.Unlock();
 						obj->exec();
+						g_mutex.Lock();
 					} catch (std::exception& ex) {
 						printf("func/Unhandled exception: %s\n", ex.what());
 					}
 					obj->finished=true;
 				}
+				g_mutex.Unlock();
 			}
-			//GetClosestFreeItem(asyncQueue,&asyncQueueIdx);
 		}
 		ResetEvent(gEvent);
 	}
 }
 void GetClosestFreeItem(AsyncData **in,int *out){
-	/*
-	*out=0;
-	if(in){
-		if(!in[0]){
-			return;
-		}
-		for(int i=1;i<MAX_ASYNC_QUEUE;i++){
-			if((in[i])==0){
-				*out=i;
-				break;
-			}
-		}
-	}
-	*/
 	static int idx = 0;
 	idx++;
 	idx %= MAX_ASYNC_QUEUE;

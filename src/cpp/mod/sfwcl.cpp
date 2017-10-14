@@ -5,6 +5,7 @@
 #include <string.h>
 #include <limits.h>
 #include <sstream>
+#include "Mutex.h"
 //#include <mutex>
 
 #define CLIENT_BUILD 1001
@@ -57,6 +58,8 @@ typedef int (__fastcall *PFNGU)(void*, void*, bool, unsigned int);	//CGame::Upda
 
 
 int GAME_VER=6156;
+
+Mutex g_mutex;
 
 PFNLOGIN pLoginCave=0;
 PFNLOGIN pLoginSuccess=0;
@@ -283,9 +286,8 @@ int OnImpulse( const EventPhys *pEvent ){
 
 void OnUpdate(float frameTime) {
 	for (int i = 0; i < MAX_ASYNC_QUEUE; i++) {
-		///commonMutex.lock();
+		g_mutex.Lock();
 		AsyncData *obj = asyncQueue[i];
-		///commonMutex.unlock();
 		if (obj) {
 			if (obj->finished) {
 				try {
@@ -298,9 +300,7 @@ void OnUpdate(float frameTime) {
 				} catch (std::exception& ex) {
 					printf("delete/Unhandled exception: %s", ex.what());
 				}
-				//commonMutex.lock();
 				asyncQueue[i] = 0;
-				//commonMutex.unlock();
 			} else if (obj->executing) {
 				try {
 					obj->onUpdate();
@@ -309,6 +309,7 @@ void OnUpdate(float frameTime) {
 				}
 			}
 		}
+		g_mutex.Unlock();
 	}
 	IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
 	pScriptSystem->BeginCall("OnUpdate");

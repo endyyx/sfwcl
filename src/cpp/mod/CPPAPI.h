@@ -12,6 +12,7 @@
 #include <IRenderer.h>
 #include <IRendererD3D9.h>
 #include <Windows.h>
+#include "Mutex.h"
 //#include <mutex>
 #include "NetworkStuff.h"
 #pragma region CPPAPIDefinitions
@@ -61,35 +62,35 @@ struct AsyncData{
 	virtual void onUpdate() {}
 	virtual void postExec() {}
 	virtual int callAsync(IFunctionHandler *pH=0) {
-		//MessageBoxA(0, "call-Async", 0, 0);
+		extern Mutex g_mutex;
+		g_mutex.Lock();
 		extern HANDLE gEvent;
-		//extern std::mutex commonMutex;
 		extern AsyncData *asyncQueue[MAX_ASYNC_QUEUE];
 		extern int asyncQueueIdx;
-		//MessageBoxA(0, "pre-GetClosestFreeItem", 0, 0);
 		GetClosestFreeItem(asyncQueue, &asyncQueueIdx);
-		//MessageBoxA(0, "post-GetClosestFreeItem", 0, 0);
 		this->id = asyncQueueIdx;
 		this->finished = false;
 		this->executing = false;
-		//MessageBoxA(0, "pre-SetEvent", 0, 0);
 		SetEvent(gEvent);
-		//MessageBoxA(0, "Calling Async", 0, 0);
-		//commonMutex.lock();
 		asyncQueue[asyncQueueIdx] = this;
-		//commonMutex.unlock();
+		g_mutex.Unlock();
 		if (pH) {
 			return pH->EndFunction(asyncQueueIdx);
 		}
 		return 0;
 	}
 	void ret(std::string what) {
+		extern Mutex g_mutex;
 		extern IScriptSystem *pScriptSystem;
 		extern std::map<std::string, std::string> asyncRetVal;
 		char outn[255];
 		sprintf(outn, "AsyncRet%d", (int)id);
 		pScriptSystem->SetGlobalAny(outn, what.c_str());
+#ifdef DO_ASYNC_CHECKS
+		g_mutex.Lock();
 		asyncRetVal[std::string(outn)] = what;
+		g_mutex.Unlock();
+#endif
 	}
 	AsyncData():
 		finished(false),
