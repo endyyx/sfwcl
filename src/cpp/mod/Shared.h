@@ -8,6 +8,8 @@
 #ifndef SHARED_H
 #define SHARED_H
 
+#define MAX_ASYNC_QUEUE 255
+
 struct MENU_SCREEN {
 	void *PTR0;
 	void *PTR1;
@@ -29,6 +31,8 @@ struct GAME_32_6156 {
 		#define OLD_MSVC_DETECTED  // almost no C++11 support
 	#endif
 #endif
+
+void ToggleLoading(const char *text, bool loading = true, bool reset = true);
 
 #ifdef USE_SDK
 //#define WANT_CIRCLEJUMP

@@ -6,6 +6,7 @@
 #include <IGameObjectSystem.h>
 #include <CryThread.h>
 #include <IScriptSystem.h>
+#include "AtomicCounter.h"
 //#include <mutex>
 //#include <functional>
 
@@ -16,9 +17,9 @@ extern int asyncQueueIdx;
 extern std::map<std::string, std::string> asyncRetVal;
 extern IScriptSystem *pScriptSystem;
 
-HANDLE gEvent;
+bool DownloadMapFromObject(DownloadMapStruct *now);
 
-extern void ToggleLoading(const char *text,bool loading,bool reset);
+HANDLE gEvent;
 
 CPPAPI::CPPAPI(ISystem *pSystem, IGameFramework *pGameFramework)
 	:	m_pSystem(pSystem),
@@ -54,6 +55,12 @@ void CPPAPI::RegisterMethods(){
 	SCRIPT_REG_TEMPLFUNC(AsyncConnectWebsite,"host, page, port, http11, timeout, methodGet");
 	SCRIPT_REG_TEMPLFUNC(MsgBox,"text,title,mask");
 	SCRIPT_REG_TEMPLFUNC(DoAsyncChecks, "");
+	SCRIPT_REG_TEMPLFUNC(AsyncDownloadMap, "mapn, mapdl");
+	SCRIPT_REG_TEMPLFUNC(ToggleLoading, "text, loading, reset");
+}
+int CPPAPI::ToggleLoading(IFunctionHandler *pH, const char *text, bool loading, bool reset) {
+	::ToggleLoading(text, loading, reset);
+	return pH->EndFunction(true);
 }
 int CPPAPI::FSetCVar(IFunctionHandler* pH,const char * cvar,const char *val){
 #ifdef IS6156DLL
@@ -110,10 +117,13 @@ int CPPAPI::GetMapName(IFunctionHandler *pH){
 #endif
 }
 int CPPAPI::DoAsyncChecks(IFunctionHandler *pH) {
+#ifdef DO_ASYNC_CHECKS
+	extern Mutex g_mutex;
 	IScriptTable *tbl = pScriptSystem->CreateTable();
 	tbl->AddRef();
 	std::vector<IScriptTable*> refs;
 	//commonMutex.lock();
+	g_mutex.Lock();
 	for (std::map<std::string, std::string>::iterator it = asyncRetVal.begin(); it != asyncRetVal.end(); it++) {
 		IScriptTable *item = pScriptSystem->CreateTable();
 		item->AddRef();
@@ -122,6 +132,7 @@ int CPPAPI::DoAsyncChecks(IFunctionHandler *pH) {
 		tbl->PushBack(item);
 		refs.push_back(item);
 	}
+	g_mutex.Unlock();
 	int code = pH->EndFunction(tbl);
 #ifdef OLD_MSVC_DETECTED
 	for (size_t i = 0; i < refs.size(); i++ ) {
@@ -134,6 +145,9 @@ int CPPAPI::DoAsyncChecks(IFunctionHandler *pH) {
 #endif
 	SAFE_RELEASE(tbl);
 	return code;
+#else
+	return pH->EndFunction(0);
+#endif
 }
 int CPPAPI::MapAvailable(IFunctionHandler *pH,const char *_path){
 	char *ver=0;
@@ -189,65 +203,6 @@ int CPPAPI::MapAvailable(IFunctionHandler *pH,const char *_path){
 	}
 	return pH->EndFunction(false);
 }
-
-bool DownloadMapFromObject(DownloadMapStruct *now) {
-	IRenderer *pRend = pSystem->GetIRenderer();
-	const char *mapn = now->mapn;
-	const char *mapdl = now->mapdl;
-	HWND hwnd = (HWND)pRend->GetHWND();
-	//ShowWindow(hwnd,SW_MINIMIZE);
-	char cwd[5120];
-	GetModuleFileNameA(0, cwd, 5120);
-	int last = -1;
-	for (int i = 0, j = strlen(cwd); i<j; i++) {
-		if (cwd[i] == '\\')
-			last = i;
-	}
-	if (last >= 0)
-		cwd[last] = 0;
-	char params[5120];
-	sprintf(cwd, "%s\\..\\SfwClFiles\\", cwd);
-	sprintf_s(params, "\"%s\" \"%s\" \"%s\"", mapn, mapdl, cwd);
-	SHELLEXECUTEINFOA info;
-	ZeroMemory(&info, sizeof(SHELLEXECUTEINFOA));
-	info.lpDirectory = cwd;
-	info.lpParameters = params;
-	info.lpFile = "MapDownloader.exe";
-	info.nShow = SW_SHOW;
-	info.cbSize = sizeof(SHELLEXECUTEINFOA);
-	info.fMask = SEE_MASK_NOCLOSEPROCESS;
-	info.hwnd = 0;
-	//MessageBoxA(0,cwd,0,0);
-	if (!ShellExecuteExA(&info)) {
-		printf("\nFailed to start map downloader, error code %d\n", GetLastError());
-		while (getchar() != '\n') {}
-		return false;
-	}
-	WaitForSingleObject(info.hProcess, INFINITE);
-	DWORD exitCode;
-	bool ret = true;
-	if (GetExitCodeProcess(info.hProcess, &exitCode)) {
-		if (exitCode != 0) {
-			printf("\nFailed to download map, error code: %d\n", (int)exitCode);
-			ret = false;
-		}
-	}
-	ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
-	if (pLevelSystem) {
-		pLevelSystem->Rescan();
-	}
-	ShowWindow(hwnd, SW_MAXIMIZE);
-	return ret;
-}
-bool AsyncDownloadMap(int id,AsyncData *obj){
-	GetAsyncObj(DownloadMapStruct,now);
-	if(now){
-		now->success=DownloadMapFromObject(now);
-		//ToggleLoading("Map downloaded",false);
-		return now->success;
-	}
-	return false;
-}
 int CPPAPI::DownloadMap(IFunctionHandler *pH,const char *mapn,const char *mapdl){
 	DownloadMapStruct *now=new DownloadMapStruct;
 	if(now){
@@ -258,6 +213,31 @@ int CPPAPI::DownloadMap(IFunctionHandler *pH,const char *mapn,const char *mapdl)
 		//CreateAsyncCallLua(AsyncDownloadMap,now);
 		now->success = DownloadMapFromObject(now);
 		return pH->EndFunction(now->success);
+	}
+	return pH->EndFunction();
+}
+int CPPAPI::AsyncConnectWebsite(IFunctionHandler* pH, char * host, char * page, int port, bool http11, int timeout, bool methodGet, bool alive) {
+	using namespace Network;
+	ConnectStruct *now = new ConnectStruct;
+	if (now) {
+		now->host = host;
+		now->page = page;
+		now->method = methodGet ? INetGet : INetPost;
+		now->http = http11 ? INetHTTP11 : INetHTTP10;
+		now->port = port;
+		now->timeout = timeout;
+		now->alive = alive;
+		return now->callAsync(pH);
+	}
+	return pH->EndFunction();
+}
+int CPPAPI::AsyncDownloadMap(IFunctionHandler* pH, const char *path, const char *link) {
+	DownloadMapStruct *now = new DownloadMapStruct;
+	if (now) {
+		now->mapdl = link;
+		now->mapn = path;
+		now->isAsync = true;
+		return now->callAsync(pH);
 	}
 	return pH->EndFunction();
 }
@@ -313,77 +293,121 @@ int CPPAPI::MsgBox(IFunctionHandler* pH,const char *text,const char *title,int b
 	return pH->EndFunction();
 }
 #pragma endregion
-void AsyncConnect(int id, AsyncData *obj){
-	GetAsyncObj(ConnectStruct,now);
-	std::string content="\\\\Error: Unknown error";
-	if(now)
-		content=Network::Connect(now->host,now->page,now->method,now->http,now->port,now->timeout,now->alive);
-	if (content.length() > 2) {
-		if (content[0] == 0xFE && content[1] == 0xFF) content = content.substr(2);
-	}
-	obj->ret(content);
-}
-int CPPAPI::AsyncConnectWebsite(IFunctionHandler* pH,char * host,char * page,int port,bool http11,int timeout,bool methodGet,bool alive){
-	using namespace Network; 
-	ConnectStruct *now=new ConnectStruct;
-	if (now) {
-		now->host = host;
-		now->page = page;
-		now->method = methodGet ? INetGet : INetPost;
-		now->http = http11 ? INetHTTP11 : INetHTTP10;
-		now->port = port;
-		now->timeout = timeout;
-		now->alive = alive;
-		return now->callAsync(pH);
-	}
-	return pH->EndFunction();
-}
+
 #pragma endregion
 
 #pragma region AsyncStuff
+bool DownloadMapFromObject(DownloadMapStruct *now) {
+	IRenderer *pRend = pSystem->GetIRenderer();
+	const char *mapn = now->mapn;
+	const char *mapdl = now->mapdl;
+	HWND hwnd = (HWND)pRend->GetHWND();
+	//ShowWindow(hwnd,SW_MINIMIZE);
+	char cwd[5120];
+	GetModuleFileNameA(0, cwd, 5120);
+	int last = -1;
+	for (int i = 0, j = strlen(cwd); i<j; i++) {
+		if (cwd[i] == '\\')
+			last = i;
+	}
+	if (last >= 0)
+		cwd[last] = 0;
+	char params[5120];
+	sprintf(cwd, "%s\\..\\SfwClFiles\\", cwd);
+	sprintf_s(params, "\"%s\" \"%s\" \"%s\"", mapn, mapdl, cwd);
+	SHELLEXECUTEINFOA info;
+	ZeroMemory(&info, sizeof(SHELLEXECUTEINFOA));
+	info.lpDirectory = cwd;
+	info.lpParameters = params;
+	info.lpFile = "MapDownloader.exe";
+	if(now->isAsync)
+		info.nShow = SW_SHOW;
+	else info.nShow = SW_HIDE;
+	info.cbSize = sizeof(SHELLEXECUTEINFOA);
+	info.fMask = SEE_MASK_NOCLOSEPROCESS;
+	info.hwnd = 0;
+	//MessageBoxA(0,cwd,0,0);
+	if (!ShellExecuteExA(&info)) {
+		printf("\nFailed to start map downloader, error code %d\n", GetLastError());
+		while (getchar() != '\n') {}
+		return false;
+	}
+	now->hProcess = info.hProcess;
+	
+	WaitForSingleObject(info.hProcess, INFINITE);
+	DWORD exitCode;
+	bool ret = true;
+	if (GetExitCodeProcess(info.hProcess, &exitCode)) {
+		if (exitCode != 0) {
+			printf("\nFailed to download map, error code: %d\n", (int)exitCode);
+			ret = false;
+		}
+	}
+	ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
+	if (pLevelSystem) {
+		pLevelSystem->Rescan();
+	}
+	if(!now->isAsync)
+		ShowWindow(hwnd, SW_MAXIMIZE);
+	return ret;
+}
+void AsyncConnect(int id, AsyncData *obj) {
+	//GetAsyncObj(ConnectStruct,now);
+	ConnectStruct *now = (ConnectStruct *)obj;
+	std::string content = "\\\\Error: Unknown error";
+	if (now) {
+		now->lock();
+		std::string host = now->host;
+		std::string page = now->page;
+		Network::INetMethods method = now->method, http = now->http;
+		unsigned short port = now->port;
+		int timeout = now->timeout;
+		bool alive = now->alive;
+		now->unlock();
+		content = Network::Connect(host, page, method, http, port, timeout, alive);
+	}
+	if (content.length() > 2) {
+		if (content[0] == 0xFE && content[1] == 0xFF) content = content.substr(2);
+	}
+	obj->ret(content.c_str());
+}
+bool AsyncDownloadMap(int id, AsyncData *obj) {
+	DownloadMapStruct *now = (DownloadMapStruct*)obj;
+	if (now) {
+		now->success = DownloadMapFromObject(now);
+		now->ret(now->success);
+		return now->success;
+	}
+	return false;
+}
 static void AsyncThread(){
+	extern Mutex g_mutex;
 	while(true){
 		WaitForSingleObject(gEvent,INFINITE);
 		if(asyncQueue){
 			for(int i=0;i<MAX_ASYNC_QUEUE;i++){
-				//commonMutex.lock();
+				g_mutex.Lock();
 				AsyncData *obj=asyncQueue[i];
-				//commonMutex.unlock();
 				if(obj && !obj->finished){
+					obj->executing = true;
+					g_mutex.Unlock();
 					try {
-						//MessageBoxA(0, "Executing", 0, 0);
-						obj->executing = true;
 						obj->exec();
 					} catch (std::exception& ex) {
 						printf("func/Unhandled exception: %s\n", ex.what());
 					}
+					g_mutex.Lock();
 					obj->finished=true;
 				}
+				g_mutex.Unlock();
 			}
-			//GetClosestFreeItem(asyncQueue,&asyncQueueIdx);
 		}
 		ResetEvent(gEvent);
 	}
 }
 void GetClosestFreeItem(AsyncData **in,int *out){
-	/*
-	*out=0;
-	if(in){
-		if(!in[0]){
-			return;
-		}
-		for(int i=1;i<MAX_ASYNC_QUEUE;i++){
-			if((in[i])==0){
-				*out=i;
-				break;
-			}
-		}
-	}
-	*/
-	static int idx = 0;
-	idx++;
-	idx %= MAX_ASYNC_QUEUE;
-	*out = idx;
+	static AtomicCounter idx(MAX_ASYNC_QUEUE);
+	*out = idx.increment();
 }
 #pragma endregion
 #endif

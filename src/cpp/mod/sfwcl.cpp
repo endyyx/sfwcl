@@ -5,6 +5,7 @@
 #include <string.h>
 #include <limits.h>
 #include <sstream>
+#include "Mutex.h"
 //#include <mutex>
 
 #define CLIENT_BUILD 1001
@@ -58,6 +59,8 @@ typedef int (__fastcall *PFNGU)(void*, void*, bool, unsigned int);	//CGame::Upda
 
 int GAME_VER=6156;
 
+Mutex g_mutex;
+
 PFNLOGIN pLoginCave=0;
 PFNLOGIN pLoginSuccess=0;
 PFNSHLS	pShowLoginScreen=0;
@@ -73,7 +76,6 @@ PFNGU pGameUpdate = 0;
 void *m_ui;
 char SvMaster[255]="m.crymp.net";
 
-void ToggleLoading(const char *text,bool loading=true,bool reset=true);
 void OnUpdate(float frameTime);
 
 #ifdef USE_SDK
@@ -159,6 +161,11 @@ IFlashPlayer *GetFlashPlayer(int offset=0, int pos=-1) {
 }
 
 void ToggleLoading(const char *text,bool loading,bool reset){
+	static bool isActive = false;
+	if (loading && isActive) {
+		reset = false;
+	}
+	isActive = loading;
 	pFlashPlayer = GetFlashPlayer();
 	if (pFlashPlayer) {
 		if(reset)
@@ -247,7 +254,7 @@ void __fastcall JoinServer(void *self,void *addr){
 void __fastcall DisconnectError(void *self, void *addr,EDisconnectionCause dc, bool connecting, const char* serverMsg){
 	if(dc==eDC_MapNotFound || dc==eDC_MapVersion){
 		IScriptSystem *pScriptSystem=pSystem->GetIScriptSystem();
-		pScriptSystem->BeginCall("finddownload");
+		pScriptSystem->BeginCall("TryDownloadFromRepo");
 		pScriptSystem->PushFuncParam(serverMsg);
 		pScriptSystem->EndCall();
 	}
@@ -283,9 +290,8 @@ int OnImpulse( const EventPhys *pEvent ){
 
 void OnUpdate(float frameTime) {
 	for (int i = 0; i < MAX_ASYNC_QUEUE; i++) {
-		///commonMutex.lock();
+		g_mutex.Lock();
 		AsyncData *obj = asyncQueue[i];
-		///commonMutex.unlock();
 		if (obj) {
 			if (obj->finished) {
 				try {
@@ -298,9 +304,7 @@ void OnUpdate(float frameTime) {
 				} catch (std::exception& ex) {
 					printf("delete/Unhandled exception: %s", ex.what());
 				}
-				//commonMutex.lock();
 				asyncQueue[i] = 0;
-				//commonMutex.unlock();
 			} else if (obj->executing) {
 				try {
 					obj->onUpdate();
@@ -309,6 +313,7 @@ void OnUpdate(float frameTime) {
 				}
 			}
 		}
+		g_mutex.Unlock();
 	}
 	IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
 	pScriptSystem->BeginCall("OnUpdate");
