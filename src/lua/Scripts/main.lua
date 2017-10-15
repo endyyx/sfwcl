@@ -552,40 +552,47 @@ function GetSvInfo(ip,port,retry,cb,skip)
 		return cb(false);
 	end);
 end
+function TryGetMap(sv, map, mapdl)
+	if sv.mapdl and sv.mapdl:len()>1 then
+		printf("$3Map is missing, but it is available to download...");
+		printf("$3Downloading the map from $6%s",sv.mapdl:gsub("%%","_"));
+		local ostate=System.GetCVar("r_fullscreen");
+		if ASYNC_MAPS then
+			System.ExecuteCommand("disconnect");
+			AsyncDownloadMap(sv.map, sv.mapdl, function(res)
+				printf("Download finished");
+				if not res then
+					printf("$4Failed to download the map!");
+					return;
+				else
+					Join(-1,sv.ip,sv.port);
+				end
+			end);
+		else
+			local res=CPPAPI.DownloadMap(sv.map,sv.mapdl);
+			if not res then
+				printf("$4Failed to download the map!");
+				return;
+			end
+			System.SetCVar("r_fullscreen",ostate);
+		end
+	else
+		printf("$4Map missing, checking repo!");
+		if sv.map and (not MapAvailable(sv.map)) then
+			TryDownloadFromRepo(sv.map, function(res)
+				if res then
+					Join(-1, sv.ip, sv.port);
+				end
+			end);
+		end
+		return;
+	end
+end
 function CheckSelectedServer(ip,port,mapname)
 	GetSvInfo(ip, port, true, function(sv)
 		if sv and sv.map then
-			if (not hasmap(sv.map)) then
-				if sv.mapdl and sv.mapdl:len()>1 then
-					printf("$3Map is missing, but it is available to download...");
-					printf("$3Downloading the map from $6%s",sv.mapdl:gsub("%%","_"));
-					local ostate=System.GetCVar("r_fullscreen");
-					if ASYNC_MAPS then
-						System.ExecuteCommand("disconnect");
-						AsyncDownloadMap(sv.map, sv.mapdl, function(res)
-							printf("Download finished");
-							if not res then
-								printf("$4Failed to download the map!");
-								return;
-							else
-								Join(-1,ip,port);
-							end
-						end);
-					else
-						local res=CPPAPI.DownloadMap(sv.map,sv.mapdl);
-						if not res then
-							printf("$4Failed to download the map!");
-							return;
-						end
-						System.SetCVar("r_fullscreen",ostate);
-					end
-				else
-					printf("$4Map missing, checking repo!");
-					if sv.map and (not hasmap(sv.map)) then
-						finddownload(sv.map); 
-					end
-					return;
-				end
+			if (not MapAvailable(sv.map)) then
+				TryGetMap(sv, sv.map, sv.mapdl)
 			end
 			if LOGGED_IN then
 				local res=Login(LOG_NAME,LOG_PWD,LOGIN_SECU);
@@ -603,7 +610,7 @@ function CheckSelectedServer(ip,port,mapname)
 			AUTH_ID=nil;
 			AUTH_PROFILE=nil;
 			AUTH_NAME=nil;
-			--if mapname and (not hasmap(mapname)) then
+			--if mapname and (not MapAvailable(mapname)) then
 			--	finddownload(mapname);
 			--end
 			printf("$5Joining non Cry-MP server at %s:%d",ip,port);
@@ -680,6 +687,7 @@ function Join(...)
 	if id==-1 then
 		ip = pwd;
 		port = ex;
+		ToggleLoading("Connecting "..ip..":"..port,true)
 	else
 		ip,port=SERVERS[id].ip,SERVERS[id].port;
 	end
@@ -727,27 +735,12 @@ function Join(...)
 		
 		local callback = function()
 			local ip=sv.ip..":"..sv.port;
-			if (not hasmap(sv.map)) then
-				if sv.mapdl and sv.mapdl:len()>1 then
-					printf("$3Map is missing, but it is available to download...");
-					printf("$3Downloading the map from $6%s",sv.mapdl:gsub("%%","_"));
-					local ostate=System.GetCVar("r_fullscreen");
-					local res=CPPAPI.DownloadMap(sv.map,sv.mapdl);
-					if not res then
-						printf("$4Failed to download the map!");
-						return;
-					end
-					System.SetCVar("r_fullscreen",ostate);
-				else
-					printf("$4Map missing, checking repo!");
-					if sv.map and (not hasmap(sv.map)) then
-						finddownload(sv.map);
-					end
-					return;
-				end
+			if (not MapAvailable(sv.map)) then
+				TryGetMap(sv, sv.map, sv.mapdl)
+			else
+				AuthConn(ip);
 			end
 			FROM_SVLIST=sv;
-			AuthConn(ip);
 		end
 		
 		
@@ -885,15 +878,22 @@ function rand(i,x)
 	local n=CPPAPI.Random();
 	return (n%x)+1;
 end
-function hasmap(name)
+function MapAvailable(name)
 	return CPPAPI.MapAvailable(name);
 end
-function finddownload(name)
+function ToggleLoading(msg, loading, reset)
+	if loading==nil then loading=true end
+	if reset==nil then reset=true end
+	CPPAPI.ToggleLoading(msg, loading, reset)
+end
+function TryDownloadFromRepo(name, callback)
+	ToggleLoading("Searching for map in repository",true)
 	SmartHTTP("GET",MASTER_ADDR,urlfmt("/api/repo.php?map=%s",name),function(content,err)
 		if not err then
 			local link = content;
 			if link == "none" then
 				printf("$4Failed to find %s map-download link in repo : no known download link",name);
+				ToggleLoading("Searching for map in repository", false)
 			else
 				local version,url=string.match(link,"(.-);(.*)");
 				if url:sub(1,4)~="http" then url="http://"..url; end
@@ -902,13 +902,23 @@ function finddownload(name)
 				if version~="-1" then
 					fname=name.."|"..version
 				end
-				if not hasmap(fname) then
+				if not MapAvailable(fname) then
 					printf("$3Map download URL found, updating map...");
-					local res=CPPAPI.DownloadMap(name,url);
-					if not res then
-						printf("$4Failed to download the map!");
-						return;
+					if ASYNC_MAPS then
+						AsyncDownloadMap(name, url, function(res)
+							if callback then
+								callback(res)
+							end
+						end);
+					else
+						local res=CPPAPI.DownloadMap(name,url);
+						if not res then
+							printf("$4Failed to download the map!");
+							return;
+						end
 					end
+				else
+					callback(true)
 				end
 			end
 		else printf("$3Failed to find map-download link at repository: %s",err); end
@@ -921,7 +931,7 @@ function saye(m)
 end 
 
 System.AddCCommand("say","saye(%line)","Bindable say to chat");
-System.AddCCommand("mapdl","finddownload(%line)","Look up in repo for map download, example usage: mapdl multiplayer/ia/pure");
+System.AddCCommand("mapdl","TryDownloadFromRepo(%line)","Look up in repo for map download, example usage: mapdl multiplayer/ia/pure");
 
 UpdateSelf()
 

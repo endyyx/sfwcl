@@ -161,6 +161,11 @@ IFlashPlayer *GetFlashPlayer(int offset=0, int pos=-1) {
 }
 
 void ToggleLoading(const char *text,bool loading,bool reset){
+	static bool isActive = false;
+	if (loading && isActive) {
+		reset = false;
+	}
+	isActive = loading;
 	pFlashPlayer = GetFlashPlayer();
 	if (pFlashPlayer) {
 		if(reset)
@@ -249,7 +254,7 @@ void __fastcall JoinServer(void *self,void *addr){
 void __fastcall DisconnectError(void *self, void *addr,EDisconnectionCause dc, bool connecting, const char* serverMsg){
 	if(dc==eDC_MapNotFound || dc==eDC_MapVersion){
 		IScriptSystem *pScriptSystem=pSystem->GetIScriptSystem();
-		pScriptSystem->BeginCall("finddownload");
+		pScriptSystem->BeginCall("TryDownloadFromRepo");
 		pScriptSystem->PushFuncParam(serverMsg);
 		pScriptSystem->EndCall();
 	}
