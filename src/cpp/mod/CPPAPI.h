@@ -186,11 +186,12 @@ struct DownloadMapStruct : public AsyncData{
 		time_t tn = time(0);
 		if ((tn - t)>1) {
 			DWORD pid = GetProcessId(hProcess);
-			HWND hWnd = GetHwnd(pid);
-			if (hWnd) {
-				char buffer[200];
-				GetWindowTextA(hWnd, buffer, sizeof(buffer));
+			HWND hWnd = 0;
+			if (pid && (hWnd = GetHwnd(pid))) {
+				char *buffer = new char[256];
+				GetWindowTextA(hWnd, buffer, 256);
 				ToggleLoading(buffer, true, !ann);
+				delete[] buffer;
 			} else ToggleLoading("Downloading map", true);
 			ann = true;
 			t = tn;
