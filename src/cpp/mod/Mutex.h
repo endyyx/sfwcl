@@ -20,6 +20,7 @@ struct Mutex {
 	}
 	bool Lock(DWORD timeo = INFINITE) {
 		DWORD res = WaitForSingleObject(hMutex, timeo);
+		threadId = GetCurrentThreadId();
 		if (res == WAIT_TIMEOUT) return false;
 		return res != WAIT_FAILED;
 	}

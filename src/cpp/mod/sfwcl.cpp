@@ -76,7 +76,6 @@ PFNGU pGameUpdate = 0;
 void *m_ui;
 char SvMaster[255]="m.crymp.net";
 
-void ToggleLoading(const char *text,bool loading=true,bool reset=true);
 void OnUpdate(float frameTime);
 
 #ifdef USE_SDK

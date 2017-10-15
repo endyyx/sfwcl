@@ -1,5 +1,6 @@
 SFWCL_VERSION="8.5"
 SFWCL_NUMVERSION = 85
+ASYNC_MAPS = true
 
 System.ExecuteCommand("cl_master m.crymp.net")
 
@@ -163,6 +164,10 @@ function AsyncConnectHTTP(host,url,method,port,http11,timeout,func)
 	method=method:upper();
 	AsyncConnCtr=(AsyncConnCtr or 0)+1;
 	AsyncCreateId(CPPAPI.AsyncConnectWebsite(host,url,port or 80,http11 or false,timeout,method=="GET" and true or false,false),func);
+end
+function AsyncDownloadMap(a,b,func)
+	printf("Downloading %s [%s]", a, b);
+	AsyncCreateId(CPPAPI.AsyncDownloadMap(a,b),func);
 end
 function SmartHTTP(method,host,url,func)
 	return AsyncConnectHTTP(host,url,method,80,true,5000,function(ret)
@@ -555,12 +560,25 @@ function CheckSelectedServer(ip,port,mapname)
 					printf("$3Map is missing, but it is available to download...");
 					printf("$3Downloading the map from $6%s",sv.mapdl:gsub("%%","_"));
 					local ostate=System.GetCVar("r_fullscreen");
-					local res=CPPAPI.DownloadMap(sv.map,sv.mapdl);
-					if not res then
-						printf("$4Failed to download the map!");
-						return;
+					if ASYNC_MAPS then
+						System.ExecuteCommand("disconnect");
+						AsyncDownloadMap(sv.map, sv.mapdl, function(res)
+							printf("Download finished");
+							if not res then
+								printf("$4Failed to download the map!");
+								return;
+							else
+								Join(-1,ip,port);
+							end
+						end);
+					else
+						local res=CPPAPI.DownloadMap(sv.map,sv.mapdl);
+						if not res then
+							printf("$4Failed to download the map!");
+							return;
+						end
+						System.SetCVar("r_fullscreen",ostate);
 					end
-					System.SetCVar("r_fullscreen",ostate);
 				else
 					printf("$4Map missing, checking repo!");
 					if sv.map and (not hasmap(sv.map)) then
@@ -646,18 +664,27 @@ function OnShowLoginScreen(doNotShow)
 	OnLogin();
 end
 function Join(...)
-	local id,pwd=...;
+	local id,pwd,ex=...;
 	if (not id) or (id and (not tonumber(id))) then
 		printf("$4Invalid server ID!");
 		return;
 	end
 	id=tonumber(id);
-	if not SERVERS[id] then
+	if id~=-1 and (not SERVERS[id]) then
 		printf("$4Server not found with id $6%d$4!",id);
 		return;
 	end
 	
-	GetSvInfo(SERVERS[id].ip,SERVERS[id].port,0,function(sv)
+	local ip,port="","";
+	
+	if id==-1 then
+		ip = pwd;
+		port = ex;
+	else
+		ip,port=SERVERS[id].ip,SERVERS[id].port;
+	end
+	
+	GetSvInfo(ip,port,0,function(sv)
 		if sv then
 			printf("$3Successfully checked the server.");
 			SERVERS[id]=sv;
@@ -862,29 +889,30 @@ function hasmap(name)
 	return CPPAPI.MapAvailable(name);
 end
 function finddownload(name)
-	local _,content,hdr,err=ConnectHTTP(MASTER_ADDR,urlfmt("/api/repo.php?map=%s",name),"GET",80,true,3)
-	if not err then
-		local link = content;
-		if link == "none" then
-			printf("$4Failed to find %s map-download link in repo : no known download link",name);
-		else
-			local version,url=string.match(link,"(.-);(.*)");
-			if url:sub(1,4)~="http" then url="http://"..url; end
-			printf("$3Found download link for map version %s in repo: %s",version,url);
-			local fname=name
-			if version~="-1" then
-				fname=name.."|"..version
-			end
-			if not hasmap(fname) then
-				printf("$3Map download URL found, updating map...");
-				local res=CPPAPI.DownloadMap(name,url);
-				if not res then
-					printf("$4Failed to download the map!");
-					return;
+	SmartHTTP("GET",MASTER_ADDR,urlfmt("/api/repo.php?map=%s",name),function(content,err)
+		if not err then
+			local link = content;
+			if link == "none" then
+				printf("$4Failed to find %s map-download link in repo : no known download link",name);
+			else
+				local version,url=string.match(link,"(.-);(.*)");
+				if url:sub(1,4)~="http" then url="http://"..url; end
+				printf("$3Found download link for map version %s in repo: %s",version,url);
+				local fname=name
+				if version~="-1" then
+					fname=name.."|"..version
+				end
+				if not hasmap(fname) then
+					printf("$3Map download URL found, updating map...");
+					local res=CPPAPI.DownloadMap(name,url);
+					if not res then
+						printf("$4Failed to download the map!");
+						return;
+					end
 				end
 			end
-		end
-	else printf("$3Failed to find map-download link at repository: %s",err); end
+		else printf("$3Failed to find map-download link at repository: %s",err); end
+	end);
 end
 
 

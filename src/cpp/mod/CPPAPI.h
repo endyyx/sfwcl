@@ -33,6 +33,7 @@ public:
 	int ApplyMaskOne(IFunctionHandler* pH,ScriptHandle,int,bool);
 	int DoAsyncChecks(IFunctionHandler *pH);
 	int MsgBox(IFunctionHandler* pH,const char *text,const char* title=0,int mask=MB_OK);
+	int AsyncDownloadMap(IFunctionHandler *pH, const char *mapn, const char *mapdl);
 	//int ClearLayer(IFunctionHandler* pH,int layer);
 protected:
 	void RegisterMethods();
@@ -47,22 +48,26 @@ extern ISystem *pSystem;
 #pragma endregion
 
 #pragma region AsyncStuff
-#define MAX_ASYNC_QUEUE 255
 struct AsyncData;
 
 static void AsyncThread();
 void AsyncConnect(int id, AsyncData *obj);
+bool AsyncDownloadMap(int id, AsyncData *obj);
 inline void GetClosestFreeItem(AsyncData **in, int *out);
 
 struct AsyncData{
 	int id;
 	bool finished;
 	bool executing;
+	Mutex *mutex;
+	virtual void lock() { if (mutex) mutex->Lock(); }
+	virtual void unlock() { if (mutex) mutex->Unlock(); }
 	virtual void exec() {}
 	virtual void onUpdate() {}
 	virtual void postExec() {}
 	virtual int callAsync(IFunctionHandler *pH=0) {
 		extern Mutex g_mutex;
+		this->mutex = &g_mutex;
 		g_mutex.Lock();
 		extern HANDLE gEvent;
 		extern AsyncData *asyncQueue[MAX_ASYNC_QUEUE];
@@ -79,13 +84,13 @@ struct AsyncData{
 		}
 		return 0;
 	}
-	void ret(std::string what) {
+	void ret(ScriptAnyValue val) {
 		extern Mutex g_mutex;
 		extern IScriptSystem *pScriptSystem;
 		extern std::map<std::string, std::string> asyncRetVal;
 		char outn[255];
 		sprintf(outn, "AsyncRet%d", (int)id);
-		pScriptSystem->SetGlobalAny(outn, what.c_str());
+		pScriptSystem->SetGlobalAny(outn, val);
 #ifdef DO_ASYNC_CHECKS
 		g_mutex.Lock();
 		asyncRetVal[std::string(outn)] = what;
@@ -143,8 +148,56 @@ struct DownloadMapStruct : public AsyncData{
 	const char *mapn;
 	const char *mapdl;
 	bool success;
+	HANDLE hProcess;
+	bool ann;
+	time_t t;
+	DownloadMapStruct() {
+		ann = false;
+		t = time(0) - 10;
+	}
+	HWND GetHwnd(DWORD pid) {
+		struct Info {
+			HWND hWnd;
+			DWORD pid;
+		} info;
+		info.pid = pid;
+		info.hWnd = 0;
+		BOOL res = EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
+			Info *pParams = (Info*)(lParam);
+			DWORD processId;
+			if (GetWindowThreadProcessId(hwnd, &processId) && processId == pParams->pid) {
+				SetLastError(-1);
+				pParams->hWnd = hwnd;
+				return FALSE;
+			}
+			return TRUE;
+		}, (LPARAM)&info);
+
+		if (!res && GetLastError() == -1 && info.hWnd) {
+			return info.hWnd;
+		}
+
+		return 0;
+	}
+	virtual void onUpdate() {
+		time_t tn = time(0);
+		if ((tn - t)>1) {
+			DWORD pid = GetProcessId(hProcess);
+			HWND hWnd = GetHwnd(pid);
+			if (hWnd) {
+				char buffer[200];
+				GetWindowTextA(hWnd, buffer, sizeof(buffer));
+				ToggleLoading(buffer, true, !ann);
+			} else ToggleLoading("Downloading map", true);
+			ann = true;
+			t = tn;
+		}
+	}
+	virtual void postExec() {
+		ToggleLoading("Downloading map", false);
+	}
 	virtual void exec() {
-		AsyncConnect(this->id, (AsyncData*)this);
+		AsyncDownloadMap(this->id, (AsyncData*)this);
 	}
 };
 #pragma endregion
