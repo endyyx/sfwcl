@@ -14,6 +14,7 @@ struct MENU_SCREEN {
 	void *PTR0;
 	void *PTR1;
 };
+typedef void* VOIDPTR;
 enum EMENUSCREEN
 {
 	MENUSCREEN_FRONTENDSTART,
@@ -25,14 +26,13 @@ enum EMENUSCREEN
 	MENUSCREEN_COUNT
 };
 typedef MENU_SCREEN* MENU_SCREEN_PTR;
-struct FLASH_OBJ_32_6156 {
-	unsigned char dummy[0x68];
-	MENU_SCREEN_PTR arr[6];
+template<int T,int NPtr,class Q>
+struct OFFSET_STRUCT {
+	unsigned char dummy[T];
+	Q arr[NPtr];
 };
-struct FLASH_OBJ_64_6156 {
-	unsigned char dummy[0x80];
-	MENU_SCREEN_PTR arr[6];
-};
+typedef OFFSET_STRUCT<0x68, 6, MENU_SCREEN_PTR> FLASH_OBJ_32_6156;
+typedef OFFSET_STRUCT<0x80, 6, MENU_SCREEN_PTR> FLASH_OBJ_64_6156;
 struct GAME_32_6156 {
 	unsigned char dummy[0x30];
 	FLASH_OBJ_32_6156 *pFlashObj;

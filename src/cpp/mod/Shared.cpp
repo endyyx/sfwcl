@@ -102,7 +102,7 @@ bool autoUpdateClient(){
 	char cwd[5120];
 	GetModuleFileNameA(0,cwd,5120);
 	int last=-1;
-	for(int i=0,j=strlen(cwd);i<j;i++){
+	for(size_t i=0,j=strlen(cwd);i<j;i++){
 		if(cwd[i]=='\\')
 			last=i;
 	}
