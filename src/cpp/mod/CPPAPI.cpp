@@ -55,7 +55,12 @@ void CPPAPI::RegisterMethods(){
 	SCRIPT_REG_TEMPLFUNC(AsyncConnectWebsite,"host, page, port, http11, timeout, methodGet");
 	SCRIPT_REG_TEMPLFUNC(MsgBox,"text,title,mask");
 	SCRIPT_REG_TEMPLFUNC(DoAsyncChecks, "");
-	SCRIPT_REG_TEMPLFUNC(AsyncDownloadMap,"mapn, mapdl")
+	SCRIPT_REG_TEMPLFUNC(AsyncDownloadMap, "mapn, mapdl");
+	SCRIPT_REG_TEMPLFUNC(ToggleLoading, "text, loading, reset");
+}
+int CPPAPI::ToggleLoading(IFunctionHandler *pH, const char *text, bool loading, bool reset) {
+	::ToggleLoading(text, loading, reset);
+	return pH->EndFunction(true);
 }
 int CPPAPI::FSetCVar(IFunctionHandler* pH,const char * cvar,const char *val){
 #ifdef IS6156DLL
