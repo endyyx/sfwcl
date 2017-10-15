@@ -15,7 +15,6 @@ bool actAsUpdater = false;
 
 #pragma comment(lib,"Ws2_32")
 #pragma comment(lib,"urlmon")
-#pragma comment(lib,"zlibstat")
 using namespace std;
 
 static char pbuffer[512];
@@ -103,7 +102,7 @@ public:
 		} else if(prog==progMax && progMax>0){
 			for(int i=0;i<len;i++)
 				printf("\b \b\b");
-			printf("100%\n");
+			printf("100%%\n");
 		}
 		return S_OK;
 	}
@@ -139,12 +138,12 @@ bool IsProcessActive(const char *proc){
     } else {
         pe32.dwSize = sizeof(PROCESSENTRY32);
         if (Process32First(hProcessSnap, &pe32)) {
-            if (!stricmp(pe32.szExeFile,proc)) {
+            if (!_stricmp(pe32.szExeFile,proc)) {
                 CloseHandle(hProcessSnap);
 				return true;
             } else {
                 while (Process32Next(hProcessSnap, &pe32)) { 
-                    if (!stricmp(pe32.szExeFile,proc)) {
+                    if (!_stricmp(pe32.szExeFile,proc)) {
 						CloseHandle(hProcessSnap);
 						return true;
 					}
@@ -321,12 +320,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam){
                               WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                               15, 55, 350, 24,
                               hwnd, (HMENU)(123),
-                              (HINSTANCE) GetWindowLong (hwnd, GWL_HINSTANCE), NULL);
+                              (HINSTANCE) GetWindowLongPtr(hwnd, GWLP_HINSTANCE), NULL);
 			spam=CreateWindowA("static", "ST_SPAM",
                               WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                               30, 80, 350, 24,
                               hwnd, (HMENU)(123),
-                              (HINSTANCE) GetWindowLong (hwnd, GWL_HINSTANCE), NULL);
+                              (HINSTANCE) GetWindowLongPtr(hwnd, GWLP_HINSTANCE), NULL);
 			SetWindowText(hInfo,"Action: none");
 			SetWindowText(spam,"Game will start as soon as possible");
 			CreateThread(0,0,(LPTHREAD_START_ROUTINE)WorkerThread,0,0,0);
@@ -351,8 +350,8 @@ int WorkerThread(void*){
 		}
 		SetWindowTextA(hInfo,"Updating a client...");
 	}
-	int argc=::__argc;
-	char **argv=::__argv;
+	int argc=__argc;
+	char **argv=__argv;
 	if(argc<3){
 		PostQuitMessage(19);
 		return 19;
@@ -404,7 +403,7 @@ int WorkerThread(void*){
 	StatusCallback stat;
 	IBindStatusCallback *callback=(IBindStatusCallback*)&stat;
 	printf("Downloading file: ");
-	retry:
+//retry:
 	HRESULT ok=URLDownloadToFileA(0,mapdl,fpath,0,&stat);
 	if(SUCCEEDED(ok)){
 		printf("Map was successfuly downloaded! \nExtracting...\n");
@@ -461,7 +460,7 @@ _end_:
 				cwd[last]=0;
 			char params[5120];
 			sprintf(cwd,"%s\\..\\Bin32\\",cwd);
-			sprintf_s(params,"-mod sfwcl",cwd);
+			sprintf_s(params,"-mod sfwcl");
 			SHELLEXECUTEINFOA info;
 			ZeroMemory(&info,sizeof(SHELLEXECUTEINFOA));
 			info.lpDirectory=cwd;

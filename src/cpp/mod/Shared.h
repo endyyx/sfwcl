@@ -27,6 +27,9 @@ struct GAME_32_6156 {
 /* Trying to compile the headers from SDK => 4MB error log @ G++ */
 #ifdef _MSC_VER
 	#define USE_SDK
+	#if _MSC_VER <= 1600  // VS2010 and older
+		#define OLD_MSVC_DETECTED  // almost no C++11 support
+	#endif
 #endif
 
 void ToggleLoading(const char *text, bool loading = true, bool reset = true);
