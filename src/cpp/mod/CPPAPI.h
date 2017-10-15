@@ -151,9 +151,11 @@ struct DownloadMapStruct : public AsyncData{
 	bool success;
 	HANDLE hProcess;
 	bool ann;
+	bool isAsync;
 	time_t t;
 	DownloadMapStruct() {
 		ann = false;
+		isAsync = false;
 		t = time(0) - 10;
 	}
 	HWND GetHwnd(DWORD pid) {

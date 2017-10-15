@@ -230,6 +230,7 @@ int CPPAPI::AsyncDownloadMap(IFunctionHandler* pH, const char *path, const char 
 	if (now) {
 		now->mapdl = link;
 		now->mapn = path;
+		now->isAsync = true;
 		return now->callAsync(pH);
 	}
 	return pH->EndFunction();
@@ -313,7 +314,9 @@ bool DownloadMapFromObject(DownloadMapStruct *now) {
 	info.lpDirectory = cwd;
 	info.lpParameters = params;
 	info.lpFile = "MapDownloader.exe";
-	info.nShow = SW_SHOW;
+	if(now->isAsync)
+		info.nShow = SW_SHOW;
+	else info.nShow = SW_HIDE;
 	info.cbSize = sizeof(SHELLEXECUTEINFOA);
 	info.fMask = SEE_MASK_NOCLOSEPROCESS;
 	info.hwnd = 0;
@@ -338,7 +341,8 @@ bool DownloadMapFromObject(DownloadMapStruct *now) {
 	if (pLevelSystem) {
 		pLevelSystem->Rescan();
 	}
-	ShowWindow(hwnd, SW_MAXIMIZE);
+	if(!now->isAsync)
+		ShowWindow(hwnd, SW_MAXIMIZE);
 	return ret;
 }
 void AsyncConnect(int id, AsyncData *obj) {
