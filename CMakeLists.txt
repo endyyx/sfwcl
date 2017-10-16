@@ -25,25 +25,28 @@ if(SFWCL_DLL)
 	add_library(sfwcl MODULE ${SFWCL_DLL_SOURCES})
 endif()
 
-option(SFWCL_PAK "Create sfwcl.pak (requires 7-zip)" OFF)
-if(SFWCL_PAK)
-	set(SFWCL_PAK_FILE "${CMAKE_CURRENT_BINARY_DIR}/sfwcl.pak")
-	set(SFWCL_PAK_CONTENT "${CMAKE_CURRENT_SOURCE_DIR}/src/lua/Scripts")
-	find_program(7Z_EXE 7z PATHS "$ENV{ProgramFiles}/7-Zip" "$ENV{ProgramFiles\(x86\)}/7-Zip" DOC "Path to 7z executable")
-	if(NOT 7Z_EXE)
-		message(FATAL_ERROR "7-zip executable not found")
-	endif()
-	message(STATUS "Using 7-zip: ${7Z_EXE}")
-	add_custom_command(
-		OUTPUT ${SFWCL_PAK_FILE}
-		COMMAND ${7Z_EXE} a -bb -bd -tzip ${SFWCL_PAK_FILE} ${SFWCL_PAK_CONTENT}
-	)
-	add_custom_target(mod_pak ALL DEPENDS ${SFWCL_PAK_FILE})
-	if(MSVC_IDE)
-		# copy sfwcl.pak to output directory created by Visual Studio
-		add_custom_command(TARGET mod_pak POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E copy ${SFWCL_PAK_FILE} ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
+# only Windows version of 7-zip creates valid .pak files
+if(CMAKE_HOST_WIN32)
+	option(SFWCL_PAK "Create sfwcl.pak (requires 7-zip)" OFF)
+	if(SFWCL_PAK)
+		set(SFWCL_PAK_FILE "${CMAKE_CURRENT_BINARY_DIR}/sfwcl.pak")
+		set(SFWCL_PAK_CONTENT "${CMAKE_CURRENT_SOURCE_DIR}/src/lua/Scripts")
+		find_program(7Z_EXE 7z PATHS "$ENV{ProgramFiles}/7-Zip" "$ENV{ProgramFiles\(x86\)}/7-Zip" DOC "Path to 7z executable")
+		if(NOT 7Z_EXE)
+			message(FATAL_ERROR "7-zip executable not found")
+		endif()
+		message(STATUS "Using 7-zip: ${7Z_EXE}")
+		add_custom_command(
+			OUTPUT ${SFWCL_PAK_FILE}
+			COMMAND ${7Z_EXE} a -bb -bd -tzip ${SFWCL_PAK_FILE} ${SFWCL_PAK_CONTENT}
 		)
+		add_custom_target(mod_pak ALL DEPENDS ${SFWCL_PAK_FILE})
+		if(MSVC_IDE)
+			# copy sfwcl.pak to output directory created by Visual Studio
+			add_custom_command(TARGET mod_pak POST_BUILD
+				COMMAND ${CMAKE_COMMAND} -E copy ${SFWCL_PAK_FILE} ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
+			)
+		endif()
 	endif()
 endif()
 
