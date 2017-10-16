@@ -1,12 +1,9 @@
-/* truly no idea is __WORDSIZE is 64 on VS compiler at compiling x64 solution, I tested just with GCC */
-#ifndef _MSC_VER
-#if (__WORDSIZE==64) || defined(_WIN64) || defined(WIN64)	
-#define IS64
-#endif
-#endif
-
 #ifndef SHARED_H
 #define SHARED_H
+
+#ifdef _WIN64
+#define IS64  // 64-bit build
+#endif
 
 #define MAX_ASYNC_QUEUE 255
 
