@@ -39,6 +39,12 @@ if(SFWCL_PAK)
 		COMMAND ${7Z_EXE} a -bb -bd -tzip ${SFWCL_PAK_FILE} ${SFWCL_PAK_CONTENT}
 	)
 	add_custom_target(mod_pak ALL DEPENDS ${SFWCL_PAK_FILE})
+	if(MSVC_IDE)
+		# copy sfwcl.pak to output directory created by Visual Studio
+		add_custom_command(TARGET mod_pak POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy ${SFWCL_PAK_FILE} ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
+		)
+	endif()
 endif()
 
 option(SFWCL_LAUNCHER "Build SafeWritingClient.exe" OFF)
