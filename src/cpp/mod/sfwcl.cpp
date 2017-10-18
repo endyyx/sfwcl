@@ -52,7 +52,7 @@ typedef bool (__fastcall *PFNGSS)(void*,void*,SServerInfo&);		//HUD::GetSelected
 typedef void (__fastcall *PFNDE)(void*,void*,EDisconnectionCause, bool,const char*);	//HUD::OnDisconnectError
 typedef void (__fastcall *PFNSE)(void*,void*,const char*,int);		//HUD::ShowError
 typedef void* (__fastcall *PFNGM)(void*, void*);					//CGame::GetMenu
-typedef void* (__fastcall *PFNGMS)(void*, void*, char);				//FlashObj::GetMenuScreen
+typedef void* (__fastcall *PFNGMS)(void*, void*, EMENUSCREEN);				//FlashObj::GetMenuScreen
 typedef bool (__fastcall *PFNMIL)(void*, void*);					//FlashScreen::IsLoaded
 typedef int (__fastcall *PFNGU)(void*, void*, bool, unsigned int);	//CGame::Update
 
@@ -76,7 +76,6 @@ PFNGU pGameUpdate = 0;
 void *m_ui;
 char SvMaster[255]="m.crymp.net";
 
-void ToggleLoading(const char *text,bool loading=true,bool reset=true);
 void OnUpdate(float frameTime);
 
 #ifdef USE_SDK
@@ -93,8 +92,6 @@ void CommandClMaster(IConsoleCmdArgs *pArgs){
 	pScriptSystem->PushFuncParam("%s");
 	pScriptSystem->PushFuncParam(buff);
 	pScriptSystem->EndCall();
-	
-	//ToggleLoading("Setting master",true);
 }
 void CommandRldMaps(IConsoleCmdArgs *pArgs){
 	ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
@@ -153,7 +150,21 @@ IFlashPlayer *GetFlashPlayer(int offset=0, int pos=-1) {
 	void *pMenu = pGetMenu(pGame, pGetMenu);
 	for (int i = offset; i < 6; i++) {
 		if (pos != -1 && i != pos) continue;
-		MENU_SCREEN *pMenuScreen = (MENU_SCREEN*)pGetMenuScreen(pMenu, pGetMenuScreen, i);
+#ifdef IS64
+		/*MENU_SCREEN *pMenuScreen = 0;
+		BYTE exec[] = "\x57\x48\xC7\xC7\xB0\x04\x2F\x39\xFF\xD7\x5F\xC2\x00\x00";
+		typedef void* (*PFNASMGETMENUSCREEN)(void*, uint32_t);
+		DWORD old;
+		VirtualProtect(exec, sizeof(exec), PAGE_EXECUTE_READ, &old);
+		PFNASMGETMENUSCREEN pFunc = (PFNASMGETMENUSCREEN)&exec[0];
+		pMenuScreen = (MENU_SCREEN*)pFunc(pMenu, i);
+		VirtualProtect(exec, sizeof(exec), old, 0);*/
+		MENU_SCREEN *pMenuScreen = 0;
+		FLASH_OBJ_64_6156 *pFlashObj = (FLASH_OBJ_64_6156*)pMenu;
+		pMenuScreen = pFlashObj->arr[i];
+#else
+		MENU_SCREEN *pMenuScreen = (MENU_SCREEN*)pGetMenuScreen(pMenu, pGetMenuScreen, (EMENUSCREEN)i);
+#endif
 		if (pMenuScreen && pMenuIsLoaded(pMenuScreen, pMenuIsLoaded)) {
 			return (IFlashPlayer*)pMenuScreen->PTR1;
 		}
@@ -162,6 +173,11 @@ IFlashPlayer *GetFlashPlayer(int offset=0, int pos=-1) {
 }
 
 void ToggleLoading(const char *text,bool loading,bool reset){
+	static bool isActive = false;
+	if (loading && isActive) {
+		reset = false;
+	}
+	isActive = loading;
 	pFlashPlayer = GetFlashPlayer();
 	if (pFlashPlayer) {
 		if(reset)
@@ -250,7 +266,7 @@ void __fastcall JoinServer(void *self,void *addr){
 void __fastcall DisconnectError(void *self, void *addr,EDisconnectionCause dc, bool connecting, const char* serverMsg){
 	if(dc==eDC_MapNotFound || dc==eDC_MapVersion){
 		IScriptSystem *pScriptSystem=pSystem->GetIScriptSystem();
-		pScriptSystem->BeginCall("finddownload");
+		pScriptSystem->BeginCall("TryDownloadFromRepo");
 		pScriptSystem->PushFuncParam(serverMsg);
 		pScriptSystem->EndCall();
 	}
@@ -336,7 +352,7 @@ extern "C" {
 			case 6156:
 				fillNOP((void*)0x39689899,6);
 				fillNOP((void*)0x396898A8,6);
-				pGameGlobal = (GAME_32_6156*)0x3941C858;
+				
 				pGetMenu = (PFNGM)0x390BB910;
 				pGetMenuScreen = (PFNGMS)0x392F04B0;
 				pMenuIsLoaded = (PFNMIL)0x39340220;
@@ -382,7 +398,7 @@ extern "C" {
 			case 6156:
 				fillNOP((void*)0x3953FB7E,2);
 				fillNOP((void*)0x3953FB87,2);
-				pGameGlobal = (GAME_32_6156*)0x392A6FCC;
+				
 				pGetMenu = (PFNGM)0x390B5CA0;
 				pGetMenuScreen = (PFNGMS)0x3921D310;
 				pMenuIsLoaded = (PFNMIL)0x39249410;

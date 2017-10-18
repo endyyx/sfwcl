@@ -41,6 +41,9 @@ namespace Network{
 				}
 			}
 			catch (std::exception& ex) {
+			#if _MSC_VER
+				UNREFERENCED_PARAMETER(ex);
+			#endif
 				script = page;
 				params = "";
 			}

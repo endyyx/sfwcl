@@ -1,22 +1,35 @@
-/* truly no idea is __WORDSIZE is 64 on VS compiler at compiling x64 solution, I tested just with GCC */
-#ifndef _MSC_VER
-#if (__WORDSIZE==64) || defined(_WIN64) || defined(WIN64)	
-#define IS64
-#endif
-#endif
-
 #ifndef SHARED_H
 #define SHARED_H
+
+#ifdef _WIN64
+#define IS64  // 64-bit build
+#endif
+
+#define MAX_ASYNC_QUEUE 255
 
 struct MENU_SCREEN {
 	void *PTR0;
 	void *PTR1;
 };
-typedef MENU_SCREEN* MENU_SCREEN_PTR;
-struct FLASH_OBJ_32_6156 {
-	unsigned char dummy[0x68];
-	MENU_SCREEN_PTR arr[6];
+typedef void* VOIDPTR;
+enum EMENUSCREEN
+{
+	MENUSCREEN_FRONTENDSTART,
+	MENUSCREEN_FRONTENDINGAME,
+	MENUSCREEN_FRONTENDLOADING,
+	MENUSCREEN_FRONTENDRESET,
+	MENUSCREEN_FRONTENDTEST,
+	MENUSCREEN_FRONTENDSPLASH,
+	MENUSCREEN_COUNT
 };
+typedef MENU_SCREEN* MENU_SCREEN_PTR;
+template<int T,int NPtr,class Q>
+struct OFFSET_STRUCT {
+	unsigned char dummy[T];
+	Q arr[NPtr];
+};
+typedef OFFSET_STRUCT<0x68, 6, MENU_SCREEN_PTR> FLASH_OBJ_32_6156;
+typedef OFFSET_STRUCT<0x80, 6, MENU_SCREEN_PTR> FLASH_OBJ_64_6156;
 struct GAME_32_6156 {
 	unsigned char dummy[0x30];
 	FLASH_OBJ_32_6156 *pFlashObj;
@@ -25,7 +38,12 @@ struct GAME_32_6156 {
 /* Trying to compile the headers from SDK => 4MB error log @ G++ */
 #ifdef _MSC_VER
 	#define USE_SDK
+	#if _MSC_VER <= 1600  // VS2010 and older
+		#define OLD_MSVC_DETECTED  // almost no C++11 support
+	#endif
 #endif
+
+void ToggleLoading(const char *text, bool loading = true, bool reset = true);
 
 #ifdef USE_SDK
 //#define WANT_CIRCLEJUMP
