@@ -13,8 +13,8 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include <shellapi.h>
 
-//std::mutex commonMutex;
 #ifdef USE_SDK
 	typedef unsigned int uint;
 	#include <IGameFramework.h>
@@ -25,7 +25,9 @@
 	#include <IUIDraw.h>
 	#include <IFlashPlayer.h>
 	#include <WinSock2.h>
-	#pragma comment(lib,"ws2_32")
+	#include <ShlObj.h>
+	#pragma comment(lib, "shell32.lib")
+	#pragma comment(lib, "ws2_32")
 	#include "CPPAPI.h"
 	#include "Socket.h"
 	#include "Structs.h"
@@ -55,11 +57,12 @@ typedef void* (__fastcall *PFNGM)(void*, void*);					//CGame::GetMenu
 typedef void* (__fastcall *PFNGMS)(void*, void*, EMENUSCREEN);				//FlashObj::GetMenuScreen
 typedef bool (__fastcall *PFNMIL)(void*, void*);					//FlashScreen::IsLoaded
 typedef int (__fastcall *PFNGU)(void*, void*, bool, unsigned int);	//CGame::Update
-
+typedef HFILE(__stdcall *PFNOPENFILE)(LPCSTR, LPOFSTRUCT, UINT); //OpenFile
 
 int GAME_VER=6156;
 
 Mutex g_mutex;
+bool g_gameFilesWritable;
 
 PFNLOGIN pLoginCave=0;
 PFNLOGIN pLoginSuccess=0;
@@ -76,10 +79,10 @@ PFNGU pGameUpdate = 0;
 void *m_ui;
 char SvMaster[255]="m.crymp.net";
 
-void OnUpdate(float frameTime);
+bool TestGameFilesWritable();
 
 #ifdef USE_SDK
-
+void OnUpdate(float frameTime);
 void CommandClMaster(IConsoleCmdArgs *pArgs){
 	if (pArgs->GetArgCount()>1)
 	{
@@ -99,66 +102,21 @@ void CommandRldMaps(IConsoleCmdArgs *pArgs){
 		pLevelSystem->Rescan();
 	}
 }
-#endif
 
-void MemScan(void *base,int size){
-	char buffer[81920]="";
-	for(int i=0;i<size;i++){
-		if(i%16==0) sprintf(buffer,"%s %#04X: ",buffer,i);
-		sprintf(buffer,"%s %02X",buffer,((char*)base)[i]&0xFF);
-		if(i%16==15) sprintf(buffer,"%s\n",buffer);
-	}
-	MessageBoxA(0,buffer,0,0);
-}
-
-/*
-	DEPRECATED:
-void __fastcall ShowError(void *self,void *addr,const char *msg,int code){
-	if(code==eDC_MapNotFound || code==eDC_MapVersion){
-		IScriptSystem *pScriptSystem=pSystem->GetIScriptSystem();
-		pScriptSystem->BeginCall("finddownload");
-		pScriptSystem->PushFuncParam(msg);
-		pScriptSystem->EndCall();
-	}
-	MessageBoxA(0,msg,0,0);
-	unhook(pShowError);
-	pShowError(self,addr,msg,code);
-	hook((void*)pShowError,(void*)ShowError);
-}
-void __fastcall OnLoginFailed(void *self,void *addr,const char *reason){
-#ifdef USE_SDK
-	pScriptSystem->BeginCall("OnLogin");
-	pScriptSystem->EndCall();
-#endif
-	pLoginSuccess(self,addr,reason);
-}
-*/
-void __fastcall OnShowLoginScr(void *self,void *addr){
-#ifdef USE_SDK
+void __fastcall OnShowLoginScr(void *self, void *addr) {
 	pScriptSystem->BeginCall("OnShowLoginScreen");
-//#ifndef IS64
 	pScriptSystem->PushFuncParam(true);
-//#endif
 	pScriptSystem->EndCall();
-	pFlashPlayer=(IFlashPlayer*)*(unsigned long*)(self);
+	pFlashPlayer = (IFlashPlayer*)*(unsigned long*)(self);
 	pFlashPlayer->Invoke1("_root.Root.MainMenu.MultiPlayer.MultiPlayer.gotoAndPlay", "internetgame");
-#endif
 }
 
-IFlashPlayer *GetFlashPlayer(int offset=0, int pos=-1) {
+IFlashPlayer *GetFlashPlayer(int offset = 0, int pos = -1) {
 	if (!pGetMenu) return pFlashPlayer;
 	void *pMenu = pGetMenu(pGame, pGetMenu);
 	for (int i = offset; i < 6; i++) {
 		if (pos != -1 && i != pos) continue;
 #ifdef IS64
-		/*MENU_SCREEN *pMenuScreen = 0;
-		BYTE exec[] = "\x57\x48\xC7\xC7\xB0\x04\x2F\x39\xFF\xD7\x5F\xC2\x00\x00";
-		typedef void* (*PFNASMGETMENUSCREEN)(void*, uint32_t);
-		DWORD old;
-		VirtualProtect(exec, sizeof(exec), PAGE_EXECUTE_READ, &old);
-		PFNASMGETMENUSCREEN pFunc = (PFNASMGETMENUSCREEN)&exec[0];
-		pMenuScreen = (MENU_SCREEN*)pFunc(pMenu, i);
-		VirtualProtect(exec, sizeof(exec), old, 0);*/
 		MENU_SCREEN *pMenuScreen = 0;
 		FLASH_OBJ_64_6156 *pFlashObj = (FLASH_OBJ_64_6156*)pMenu;
 		pMenuScreen = pFlashObj->arr[i];
@@ -172,7 +130,7 @@ IFlashPlayer *GetFlashPlayer(int offset=0, int pos=-1) {
 	return 0;
 }
 
-void ToggleLoading(const char *text,bool loading,bool reset){
+void ToggleLoading(const char *text, bool loading, bool reset) {
 	static bool isActive = false;
 	if (loading && isActive) {
 		reset = false;
@@ -180,13 +138,128 @@ void ToggleLoading(const char *text,bool loading,bool reset){
 	isActive = loading;
 	pFlashPlayer = GetFlashPlayer();
 	if (pFlashPlayer) {
-		if(reset)
+		if (reset)
 			pFlashPlayer->Invoke1("showLOADING", loading);
 		if (loading) {
 			SFlashVarValue args[] = { text,false };
 			pFlashPlayer->Invoke("setLOADINGText", args, sizeof(args) / sizeof(args[0]));
 		}
 	}
+}
+bool checkFollowing = false;
+bool __fastcall GetSelectedServer(void *self, void *addr, SServerInfo& server) {
+	m_ui = self;
+	unhook(pGetSelectedServer);
+	bool result = pGetSelectedServer(self, addr, server);
+	hook(pGetSelectedServer, GetSelectedServer);
+	if (checkFollowing) {
+		char sz_ip[30];
+		int ip = server.m_publicIP;
+		int port = server.m_publicPort;
+#ifdef IS64
+		if (GAME_VER == 6156) {
+			ip = getField(int, &server, 0x80);
+			port = (int)getField(unsigned short, &server, 0x84);
+		}
+		else if (GAME_VER == 5767) {
+			ip = getField(int, &server, 0x30);
+			port = (int)getField(unsigned short, &server, 0x34);
+		}
+#else
+		if (GAME_VER == 5767) {
+			ip = (int)getField(int, &server, 0x14);
+			port = (int)getField(int, &server, 0x18);
+		}
+#endif
+		sprintf(sz_ip, "%d.%d.%d.%d", (ip) & 0xFF, (ip >> 8) & 0xFF, (ip >> 16) & 0xFF, (ip >> 24) & 0xFF);
+		IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
+		pScriptSystem->BeginCall("CheckSelectedServer");
+		pScriptSystem->PushFuncParam(sz_ip);
+		pScriptSystem->PushFuncParam(port);
+		if (GAME_VER == 6156)
+			pScriptSystem->PushFuncParam("<unknown map>");
+		pScriptSystem->EndCall();
+	}
+	return result;
+}
+void __fastcall JoinServer(void *self, void *addr) {
+	checkFollowing = true;
+	unhook((void*)pJoinServer);
+	pJoinServer(self, addr);
+	hook((void*)pJoinServer, (void*)JoinServer);
+	checkFollowing = false;
+}
+void __fastcall DisconnectError(void *self, void *addr, EDisconnectionCause dc, bool connecting, const char* serverMsg) {
+	if (dc == eDC_MapNotFound || dc == eDC_MapVersion) {
+		IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
+		pScriptSystem->BeginCall("TryDownloadFromRepo");
+		pScriptSystem->PushFuncParam(serverMsg);
+		pScriptSystem->EndCall();
+	}
+	unhook(pDisconnectError);
+	pDisconnectError(self, addr, dc, connecting, serverMsg);
+	hook((void*)pDisconnectError, (void*)DisconnectError);
+}
+int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
+	unhook(pGameUpdate);
+	int res = pGameUpdate(self, addr, p1, p2);
+	hook((void*)pGameUpdate, (void*)GameUpdate);
+	OnUpdate(0.0f);
+	return res;
+}
+int OnImpulse(const EventPhys *pEvent) {
+#ifdef WANT_CIRCLEJUMP
+	return 1;
+#else
+	return 0;
+#endif
+}
+void OnUpdate(float frameTime) {
+	for (int i = 0; i < MAX_ASYNC_QUEUE; i++) {
+		g_mutex.Lock();
+		AsyncData *obj = asyncQueue[i];
+		if (obj) {
+			if (obj->finished) {
+				try {
+					obj->postExec();
+				}
+				catch (std::exception& ex) {
+					printf("postfn/Unhandled exception: %s", ex.what());
+				}
+				try {
+					delete obj;
+				}
+				catch (std::exception& ex) {
+					printf("delete/Unhandled exception: %s", ex.what());
+				}
+				asyncQueue[i] = 0;
+			}
+			else if (obj->executing) {
+				try {
+					obj->onUpdate();
+				}
+				catch (std::exception& ex) {
+					printf("progress_func/Unhandled exception: %s", ex.what());
+				}
+			}
+		}
+		g_mutex.Unlock();
+	}
+	IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
+	pScriptSystem->BeginCall("OnUpdate");
+	pScriptSystem->PushFuncParam(frameTime);
+	pScriptSystem->EndCall();
+}
+#endif
+
+void MemScan(void *base,int size){
+	char buffer[81920]="";
+	for(int i=0;i<size;i++){
+		if(i%16==0) sprintf(buffer,"%s %#04X: ",buffer,i);
+		sprintf(buffer,"%s %02X",buffer,((char*)base)[i]&0xFF);
+		if(i%16==15) sprintf(buffer,"%s\n",buffer);
+	}
+	MessageBoxA(0,buffer,0,0);
 }
 
 void* __stdcall Hook_GetHostByName(const char* name){
@@ -206,81 +279,53 @@ void* __stdcall Hook_GetHostByName(const char* name){
 			if(!isip)
 				memcpy(ptr,SvMaster,strlen(SvMaster));
 		}
-		h=gethostbyname(buff);
+		h = gethostbyname(buff);
 		delete [] buff;
 	} else {
-		h=gethostbyname(name);
+		h = gethostbyname(name);
 	}
 	hook(gethostbyname,Hook_GetHostByName);
 	return h;
 }
+bool TestFileWrite(const char *path) {
+	FILE *f = fopen(path, "w+");
+	if (f) {
+		fputs("test", f);
+		int sz = ftell(f);
+		fclose(f);
+		if (sz > 0) return true;
+	}
+	return false;
+}
+bool TestGameFilesWritable() {
+	char cwd[5120];
+	GetModuleFileNameA(0, cwd, 5120);
+	int last = -1;
+	for (int i = 0, j = strlen(cwd); i<j; i++) {
+		if (cwd[i] == '\\')
+			last = i;
+	}
+	if (last >= 0)
+		cwd[last] = 0;
+	char params[5120];
+	char gameDir[5120];
+	sprintf(gameDir, "%s\\..\\Game\\Levels\\_write.dat", cwd);
+	if (TestFileWrite(gameDir)) return true;
+	sprintf(cwd, "%s\\..\\SfwClFiles\\", cwd);
+	SHELLEXECUTEINFOA info;
+	ZeroMemory(&info, sizeof(SHELLEXECUTEINFOA));
+	info.lpDirectory = cwd;
+	info.lpParameters = params;
+	info.lpFile = "sfwcl_precheck.exe";
+	info.nShow = SW_HIDE;
+	info.cbSize = sizeof(SHELLEXECUTEINFOA);
+	info.fMask = SEE_MASK_NOCLOSEPROCESS;
+	info.hwnd = 0;
+	if (ShellExecuteExA(&info)) {
+		return TestFileWrite(gameDir);
+	} else return false;
+}
 
-bool checkFollowing=false;
-bool __fastcall GetSelectedServer(void *self, void *addr, SServerInfo& server){
-#ifdef USE_SDK
-	m_ui=self;
-	unhook(pGetSelectedServer);
-	bool result=pGetSelectedServer(self,addr,server);
-	hook(pGetSelectedServer,GetSelectedServer);
-	if (checkFollowing) {
-		char sz_ip[30];
-		int ip = server.m_publicIP;
-		int port = server.m_publicPort;
-#ifdef IS64
-		if (GAME_VER == 6156) {
-			ip = getField(int, &server, 0x80);
-			port = (int)getField(unsigned short, &server, 0x84);
-		} else if (GAME_VER == 5767) {
-			ip = getField(int, &server, 0x30);
-			port = (int)getField(unsigned short, &server, 0x34);
-		}
-#else
-		if (GAME_VER == 5767) {
-			ip = (int)getField(int, &server, 0x14);
-			port = (int)getField(int, &server, 0x18);
-		}
-#endif
-		//MemScan(&server, 256);
-		sprintf(sz_ip,"%d.%d.%d.%d",(ip)&0xFF,(ip>>8)&0xFF,(ip>>16)&0xFF,(ip>>24)&0xFF);
-		//ToggleLoading("Checking server",true);
-		IScriptSystem *pScriptSystem=pSystem->GetIScriptSystem();
-		pScriptSystem->BeginCall("CheckSelectedServer");
-		pScriptSystem->PushFuncParam(sz_ip);
-		pScriptSystem->PushFuncParam(port);
-		if(GAME_VER==6156)
-			pScriptSystem->PushFuncParam("<unknown map>");
-		pScriptSystem->EndCall();
-	}
-	return result;
-#endif
-}
-void __fastcall JoinServer(void *self,void *addr){
-#ifdef USE_SDK
-	checkFollowing=true;
-	unhook((void*)pJoinServer);
-	pJoinServer(self,addr);
-	hook((void*)pJoinServer,(void*)JoinServer);
-	checkFollowing=false;
-#endif
-}
-void __fastcall DisconnectError(void *self, void *addr,EDisconnectionCause dc, bool connecting, const char* serverMsg){
-	if(dc==eDC_MapNotFound || dc==eDC_MapVersion){
-		IScriptSystem *pScriptSystem=pSystem->GetIScriptSystem();
-		pScriptSystem->BeginCall("TryDownloadFromRepo");
-		pScriptSystem->PushFuncParam(serverMsg);
-		pScriptSystem->EndCall();
-	}
-	unhook(pDisconnectError);
-	pDisconnectError(self,addr,dc,connecting,serverMsg);
-	hook((void*)pDisconnectError,(void*)DisconnectError);
-}
-int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
-	unhook(pGameUpdate);
-	int res = pGameUpdate(self, addr, p1, p2);
-	hook((void*)pGameUpdate, (void*)GameUpdate);
-	OnUpdate(0.0f);
-	return res;
-}
 BOOL APIENTRY DllMain(HANDLE,DWORD,LPVOID){
 	return TRUE;
 }
@@ -290,49 +335,6 @@ inline void fillNOP(void *addr,int l){
 	memset(addr,'\x90',l);
 	VirtualProtect(addr,l*2,tmp,&tmp);
 }
-#ifdef USE_SDK
-int OnImpulse( const EventPhys *pEvent ){
-#ifdef WANT_CIRCLEJUMP
-	return 1;
-#else
-	return 0;
-#endif
-}
-#endif
-
-void OnUpdate(float frameTime) {
-	for (int i = 0; i < MAX_ASYNC_QUEUE; i++) {
-		g_mutex.Lock();
-		AsyncData *obj = asyncQueue[i];
-		if (obj) {
-			if (obj->finished) {
-				try {
-					obj->postExec();
-				} catch (std::exception& ex) {
-					printf("postfn/Unhandled exception: %s", ex.what());
-				}
-				try {
-					delete obj;
-				} catch (std::exception& ex) {
-					printf("delete/Unhandled exception: %s", ex.what());
-				}
-				asyncQueue[i] = 0;
-			} else if (obj->executing) {
-				try {
-					obj->onUpdate();
-				} catch (std::exception& ex) {
-					printf("progress_func/Unhandled exception: %s", ex.what());
-				}
-			}
-		}
-		g_mutex.Unlock();
-	}
-	IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
-	pScriptSystem->BeginCall("OnUpdate");
-	pScriptSystem->PushFuncParam(frameTime);
-	pScriptSystem->EndCall();
-}
-
 extern "C" {
 	__declspec(dllexport) void patchMem(int ver){
 		switch(ver){
@@ -340,6 +342,7 @@ extern "C" {
 			case 5767:
 				fillNOP((void*)0x3968C719,6);
 				fillNOP((void*)0x3968C728,6);
+#ifdef USE_SDK
 				pShowLoginScreen=(PFNSHLS)0x39308250;
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
 
@@ -348,11 +351,12 @@ extern "C" {
 
 				pGetSelectedServer=(PFNGSS)0x39313C40;
 				hook((void*)pGetSelectedServer,(void*)GetSelectedServer);
+#endif
 				break;
 			case 6156:
 				fillNOP((void*)0x39689899,6);
 				fillNOP((void*)0x396898A8,6);
-				
+#ifdef USE_SDK
 				pGetMenu = (PFNGM)0x390BB910;
 				pGetMenuScreen = (PFNGMS)0x392F04B0;
 				pMenuIsLoaded = (PFNMIL)0x39340220;
@@ -371,6 +375,7 @@ extern "C" {
 
 				pDisconnectError=(PFNDE)0x39315EB0; 
 				hook((void*)pDisconnectError,(void*)DisconnectError);
+#endif
 				break;
 			case 6729:
 				fillNOP((void*)0x3968B0B9,6);
@@ -380,6 +385,7 @@ extern "C" {
 			case 5767:
 				fillNOP((void*)0x3953F4B7,2);
 				fillNOP((void*)0x3953F4C0,2);
+#ifdef USE_SDK
 				pShowLoginScreen=(PFNSHLS)0x3922A330;
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
 
@@ -388,17 +394,12 @@ extern "C" {
 
 				pGetSelectedServer=(PFNGSS)0x3922E650;
 				hook((void*)pGetSelectedServer,(void*)GetSelectedServer);
-
-				//pLoginSuccess=(PFNLOGIN)0x3922C090;
-				//hookp((void*)0x3922C170,(void*)OnLoginFailed,6);
-
-				//pShowError=(PFNSE)0x3922A7F0;
-				//hook((void*)pShowError,(void*)ShowError);
+#endif
 				break;
 			case 6156:
 				fillNOP((void*)0x3953FB7E,2);
 				fillNOP((void*)0x3953FB87,2);
-				
+#ifdef USE_SDK
 				pGetMenu = (PFNGM)0x390B5CA0;
 				pGetMenuScreen = (PFNGMS)0x3921D310;
 				pMenuIsLoaded = (PFNMIL)0x39249410;
@@ -417,18 +418,15 @@ extern "C" {
 
 				pDisconnectError=(PFNDE)0x39232D90;
 				hook((void*)pDisconnectError,(void*)DisconnectError);
-
-				//pLoginSuccess=(PFNLOGIN)0x39232B30;
-				//hookp((void*)0x39232C10,(void*)OnLoginFailed,6);
+#endif
 				break;
 			case 6729:
 				fillNOP((void*)0x3953FF89,2);
 				fillNOP((void*)0x3953FF92,2);
-				
+#ifdef USE_SDK
 				pShowLoginScreen=(PFNSHLS)0x39230E00;
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
-				//pLoginSuccess=(PFNLOGIN)0x392423A0;
-				//hookp((void*)0x3923F8C0,(void*)OnLoginFailed,6);
+#endif
 				break;
 #endif
 		}
@@ -464,6 +462,7 @@ extern "C" {
 		GAME_VER=version;
 		patchMem(version);
 		hook(gethostbyname,Hook_GetHostByName);
+		g_gameFilesWritable = TestGameFilesWritable();
 #if !defined(USE_SDK)
 	#ifndef IS64
 		void *pSystem=0;
