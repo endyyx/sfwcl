@@ -319,6 +319,8 @@ bool DownloadMapFromObject(DownloadMapStruct *now) {
 	ZeroMemory(&info, sizeof(SHELLEXECUTEINFOA));
 	info.lpDirectory = cwd;
 	info.lpParameters = params;
+	extern bool g_gameFilesWritable;
+	///TODO: if g_gameFilesWritable -> MapDownloader.exe; else -> MapDownloaderUAC.exe
 	info.lpFile = "MapDownloader.exe";
 	if(now->isAsync)
 		info.nShow = SW_SHOW;
