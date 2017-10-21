@@ -71,7 +71,7 @@ struct AsyncData{
 		this->mutex = &g_mutex;
 		g_mutex.Lock();
 		extern HANDLE gEvent;
-		extern AsyncData *asyncQueue[MAX_ASYNC_QUEUE];
+		extern AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
 		extern int asyncQueueIdx;
 		GetClosestFreeItem(asyncQueue, &asyncQueueIdx);
 		this->id = asyncQueueIdx;
