@@ -70,6 +70,7 @@ Crysis/
 │           └── sfwcl.pak
 └── SfwClFiles/
     ├── MapDownloader.exe
-    └── SafeWritingClient.exe (used for joining server from web page)
+    ├── SafeWritingClient.exe (used for joining server from web page)
+    └── sfwcl_precheck.exe
 ~~~~
 - create `Crysis.exe` shortcut and add `-mod sfwcl` parameter
