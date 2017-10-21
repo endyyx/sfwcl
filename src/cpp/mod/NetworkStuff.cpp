@@ -69,8 +69,7 @@ namespace Network{
 
 			HINTERNET hRequest = HttpOpenRequest(hConnect, method == INetPost ? "POST" : "GET",
 				(script+(method==INetGet?std::string("?"+params):std::string(""))).c_str(), NULL, NULL, accept, 0, 1);
-			BOOL res = HttpSendRequest(hRequest, headers, strlen(headers), (void*)form, strlen(form));
-
+			BOOL res = HttpSendRequest(hRequest, headers, (DWORD)strlen(headers), (void*)form, (DWORD)strlen(form));
 			std::stringstream ss;
 			if (res) {
 

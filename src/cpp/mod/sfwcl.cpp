@@ -40,7 +40,7 @@
 	IScriptSystem *pScriptSystem=0;
 	IGameFramework *pGameFramework=0;
 	IFlashPlayer *pFlashPlayer=0;
-	AsyncData *asyncQueue[MAX_ASYNC_QUEUE];
+	AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
 	std::map<std::string, std::string> asyncRetVal;
 	int asyncQueueIdx = 0;
 #endif
@@ -107,7 +107,7 @@ void __fastcall OnShowLoginScr(void *self, void *addr) {
 	pScriptSystem->BeginCall("OnShowLoginScreen");
 	pScriptSystem->PushFuncParam(true);
 	pScriptSystem->EndCall();
-	pFlashPlayer = (IFlashPlayer*)*(unsigned long*)(self);
+	pFlashPlayer = *(IFlashPlayer**)(self);
 	pFlashPlayer->Invoke1("_root.Root.MainMenu.MultiPlayer.MultiPlayer.gotoAndPlay", "internetgame");
 }
 
@@ -118,13 +118,14 @@ IFlashPlayer *GetFlashPlayer(int offset = 0, int pos = -1) {
 		if (pos != -1 && i != pos) continue;
 #ifdef IS64
 		MENU_SCREEN *pMenuScreen = 0;
-		FLASH_OBJ_64_6156 *pFlashObj = (FLASH_OBJ_64_6156*)pMenu;
-		pMenuScreen = pFlashObj->arr[i];
+		pMenuScreen = getField(MENU_SCREEN*, pMenu, 0x80);
+		//FLASH_OBJ_64_6156 *pFlashObj = (FLASH_OBJ_64_6156*)pMenu;
+		//pMenuScreen = pFlashObj->arr[i];
 #else
 		MENU_SCREEN *pMenuScreen = (MENU_SCREEN*)pGetMenuScreen(pMenu, pGetMenuScreen, (EMENUSCREEN)i);
 #endif
 		if (pMenuScreen && pMenuIsLoaded(pMenuScreen, pMenuIsLoaded)) {
-			return (IFlashPlayer*)pMenuScreen->PTR1;
+			return getField(IFlashPlayer*, pMenuScreen, sizeof(void*));
 		}
 	}
 	return 0;

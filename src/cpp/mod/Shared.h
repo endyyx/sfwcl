@@ -2,14 +2,16 @@
 #define SHARED_H
 
 #ifdef _WIN64
+#ifndef IS64
 #define IS64  // 64-bit build
 #endif
+#endif
 
-#define MAX_ASYNC_QUEUE 255
+#define MAX_ASYNC_QUEUE 65536
 
 struct MENU_SCREEN {
-	void *PTR0;
-	void *PTR1;
+	void *PTR0;	//Virtual table pointer
+	void *PTR1;	//Actual first item
 };
 typedef void* VOIDPTR;
 enum EMENUSCREEN

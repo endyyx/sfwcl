@@ -104,7 +104,7 @@ bool autoUpdateClient(){
 	int last=-1;
 	for(size_t i=0,j=strlen(cwd);i<j;i++){
 		if(cwd[i]=='\\')
-			last=i;
+			last=(int)i;
 	}
 	if(last>=0)
 		cwd[last]=0;
