@@ -61,7 +61,9 @@ if(SFWCL_PRECHECK)
 			set_target_properties(sfwcl_precheck PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\"")
 		endif()
 	else()
-
+		target_sources(sfwcl_precheck PRIVATE cmake/uac.rc)
+		target_link_libraries(sfwcl_precheck shlwapi)
+		set_target_properties(sfwcl_precheck PROPERTIES LINK_FLAGS "-mwindows")
 	endif()
 endif()
 
