@@ -23,7 +23,6 @@ if(SFWCL_DLL)
 	endif()
 	file(GLOB SFWCL_DLL_SOURCES src/cpp/mod/*.cpp)
 	add_library(sfwcl MODULE ${SFWCL_DLL_SOURCES})
-	add_executable(sfwcl_precheck src/cpp/precheck/main.cpp)
 endif()
 
 # only Windows version of 7-zip creates valid .pak files
@@ -49,6 +48,11 @@ if(CMAKE_HOST_WIN32)
 			)
 		endif()
 	endif()
+endif()
+
+option(SFWCL_PRECHECK "Build sfwcl_precheck.exe" ON)
+if(SFWCL_PRECHECK)
+	add_executable(sfwcl_precheck src/cpp/precheck/main.cpp)
 endif()
 
 option(SFWCL_LAUNCHER "Build SafeWritingClient.exe" OFF)
