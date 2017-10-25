@@ -83,7 +83,7 @@ void CommandClMaster(IConsoleCmdArgs *pArgs){
 	if (pArgs->GetArgCount()>1)
 	{
 		const char *to=pArgs->GetCommandLine()+strlen(pArgs->GetArg(0))+1;
-		strcpy(SvMaster, to);
+		strncpy(SvMaster, to, sizeof(SvMaster));
 	}
 	pScriptSystem->BeginCall("printf");
 	char buff[50];
@@ -264,8 +264,8 @@ void* __stdcall Hook_GetHostByName(const char* name){
 	hostent *h=0;
 	if(strcmp(SvMaster,"gamespy.com")){
 		int len=strlen(name);
-		char *buff=new char[len+255];
-		strcpy(buff,name);
+		char *buff=new char[len+256];
+		strncpy(buff,name, len+256);
 		int a,b,c,d;
 		bool isip = sscanf(SvMaster,"%d.%d.%d.%d",&a,&b,&c,&d) == 4;
 		if(char *ptr=strstr(buff,"gamespy.com")){

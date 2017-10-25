@@ -1,6 +1,8 @@
 #ifndef SHARED_H
 #define SHARED_H
 
+#define THREAD_SAFE		//for mutexes
+
 #pragma comment(lib, "wininet")
 #pragma comment(lib, "wldap32")
 #pragma comment(lib, "shell32")
