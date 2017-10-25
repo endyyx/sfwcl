@@ -44,40 +44,42 @@ int getGameVer(const char *file){
     }
 	return -1;
 }
-void hook(void* c,void*d){
-	char *src=(char*)c;
-	char *dest=(char*)d;
+void hook(void* original_fn,void* new_fn){
+	char *src=(char*)original_fn;
+	char *dest=(char*)new_fn;
 	DWORD fl=0;
 	VirtualProtect(src,32,PAGE_READWRITE,&fl);
 #ifdef IS64
 	StaticBuffer<25> w;
 	memcpy(w.content,src,12);
-	hData[c]=w;
-	src[0]=(char)0x48;
+	hData[original_fn]=w;
+	//x64 jump construction:
+	src[0]=(char)0x48;	// 48 B8 + int64 = MOV RAX, int64
 	src[1]=(char)0xB8;
 	memcpy(src+2,&dest,8);
-	src[10]=(char)0xFF;
+	src[10]=(char)0xFF;	// FF E0 = JMP RAX (absolute jump)
 	src[11]=(char)0xE0;
 #else
 	unsigned long jmp_p=(unsigned long)((dest-src-5)&0xFFFFFFFF);
 	StaticBuffer<25> w;
 	memcpy(w.content,src,5);
-	hData[c]=w;
-	*src=(char)0xE9;
+	hData[original_fn]=w;
+	//x86 jump construction:
+	src[0]=(char)0xE9;	// E9 + int32 = JMP int32 (relative jump)
 	memcpy(src+1,&jmp_p,4);
 #endif
 	VirtualProtect(src,32,fl,&fl);
 }
-void unhook(void *c){
+void unhook(void *original_fn){
 	DWORD fl=0;
-	VirtualProtect(c,32,PAGE_READWRITE,&fl);
-	StaticBuffer<25> w=hData[c];
+	VirtualProtect(original_fn,32,PAGE_READWRITE,&fl);
+	StaticBuffer<25> w=hData[original_fn];
 #ifdef IS64
-	memcpy(c,w.content,12);
+	memcpy(original_fn,w.content,12);
 #else
-	memcpy(c,w.content,5);
+	memcpy(original_fn,w.content,5);
 #endif
-	VirtualProtect(c,32,fl,&fl);
+	VirtualProtect(original_fn,32,fl,&fl);
 }
 
 std::string fastDownload(const char *url){

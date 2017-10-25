@@ -1,10 +1,20 @@
 #ifndef SHARED_H
 #define SHARED_H
 
+#pragma comment(lib, "wininet")
+#pragma comment(lib, "wldap32")
+#pragma comment(lib, "shell32")
+#pragma comment(lib, "ws2_32")
+
 #ifdef _WIN64
 #ifndef IS64
 #define IS64  // 64-bit build
 #endif
+#endif
+
+#ifndef getField
+#define getField(type,base,offset) (*(type*)(((unsigned char*)base)+offset))
+#define GET_FIELD getField
 #endif
 
 #define MAX_ASYNC_QUEUE 65536
@@ -83,6 +93,5 @@ void unhook(void *src);
 #include <string>
 std::string fastDownload(const char *url);
 bool autoUpdateClient();
-#pragma comment(lib,"wininet")
 
 #endif SHARED_H

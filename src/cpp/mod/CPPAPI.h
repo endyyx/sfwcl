@@ -13,7 +13,6 @@
 #include <IRendererD3D9.h>
 #include <Windows.h>
 #include "Mutex.h"
-//#include <mutex>
 #include "NetworkStuff.h"
 #pragma region CPPAPIDefinitions
 class CPPAPI : public CScriptableBase {

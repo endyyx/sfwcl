@@ -6,7 +6,6 @@
 #include <string>
 #include <map>
 #include <Windows.h>
-#pragma comment(lib,"Ws2_32")
 namespace Network{
 	enum INetMethods{
 		INetGet=0xf25,INetPost,INetHTTP10,INetHTTP11

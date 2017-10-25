@@ -26,8 +26,6 @@
 	#include <IFlashPlayer.h>
 	#include <WinSock2.h>
 	#include <ShlObj.h>
-	#pragma comment(lib, "shell32.lib")
-	#pragma comment(lib, "ws2_32")
 	#include "CPPAPI.h"
 	#include "Socket.h"
 	#include "Structs.h"
@@ -45,7 +43,6 @@
 	int asyncQueueIdx = 0;
 #endif
 
-#define getField(type,base,offset) (*(type*)(((unsigned char*)base)+offset))
 
 typedef void (__fastcall *PFNLOGIN)(void*,void*,const char*);		//HUD::OnLogin
 typedef void (__fastcall *PFNSHLS)(void*,void*);					//HUD::ShowLoginScreen
@@ -54,10 +51,9 @@ typedef bool (__fastcall *PFNGSS)(void*,void*,SServerInfo&);		//HUD::GetSelected
 typedef void (__fastcall *PFNDE)(void*,void*,EDisconnectionCause, bool,const char*);	//HUD::OnDisconnectError
 typedef void (__fastcall *PFNSE)(void*,void*,const char*,int);		//HUD::ShowError
 typedef void* (__fastcall *PFNGM)(void*, void*);					//CGame::GetMenu
-typedef void* (__fastcall *PFNGMS)(void*, void*, EMENUSCREEN);				//FlashObj::GetMenuScreen
+typedef void* (__fastcall *PFNGMS)(void*, void*, EMENUSCREEN);		//FlashObj::GetMenuScreen
 typedef bool (__fastcall *PFNMIL)(void*, void*);					//FlashScreen::IsLoaded
 typedef int (__fastcall *PFNGU)(void*, void*, bool, unsigned int);	//CGame::Update
-typedef HFILE(__stdcall *PFNOPENFILE)(LPCSTR, LPOFSTRUCT, UINT); //OpenFile
 
 int GAME_VER=6156;
 

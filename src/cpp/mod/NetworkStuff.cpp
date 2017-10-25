@@ -1,11 +1,7 @@
 #include "NetworkStuff.h"
 #ifdef USE_SDK
-#include <fstream>
-
-#pragma comment(lib,"wldap32")
-#pragma comment(lib,"wininet")
-
 #include <wininet.h>
+#include <fstream>
 #include <sstream>
 
 static size_t curlCB(void *c, size_t sz, size_t n, void *out){
@@ -102,53 +98,6 @@ namespace Network{
 			}
 			return std::string("\\\\Error: Fatal error: ") + ex.what();
 		}
-
-
-		/*CURL *curl=0;
-		CURLcode res;
-		std::string buffer;
-		curl = curl_easy_init();
-		if(curl){
-		if(method==INetPost){
-		char *pg=(char*)page.c_str();
-		char *params=pg;
-		char *s=pg;
-		while(*s){
-		if(*s=='?'){
-		*s=0;
-		params=s+1;
-		break;
-		}
-		s++;
-		}
-		curl_easy_setopt(curl, CURLOPT_URL, (std::string("http://")+host+pg).c_str());
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, params);
-		//printf("Filled stuff");
-		} else {
-		curl_easy_setopt(curl, CURLOPT_URL, (std::string("http://")+host+page).c_str());
-		}
-		curl_easy_setopt(curl, CURLOPT_HEADER, 1);
-		curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlCB);
-		curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS,timeout*1000);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
-		int maxTries=15,tries=0;
-		bool success=true;
-		char msg[255];
-		do {
-		success=true;
-		res=curl_easy_perform(curl);
-		if(res!=CURLE_OK){
-		sprintf(msg,"Error: %s",curl_easy_strerror(res));
-		success=false;
-		} else break;
-		tries++;
-		Sleep(50);
-		} while(tries<maxTries);
-		curl_easy_cleanup(curl);
-		if(!success) return msg;
-		return buffer;
-		} else return "Error: Couldnt initialize cURL";*/
 		return "\\\\Error: unknown error";
 	}
 	std::string ReturnError(std::string error){
