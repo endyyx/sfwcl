@@ -26,8 +26,19 @@ void print_mem(void *mem, int len) {
 }
 
 void* trampoline(void *oldfn, void *newfn, int sz, int bits) {
-	if (bits == 64 && sz < 12) sz += 12;
-	else if (bits == 32 && sz < 5) sz += 5;
+	/*
+	let's make sure sz isn't less than minimum required for hook, if yes, fill in default values
+	it's 15 bytes in most of cases for x64 and 5 or 7 bytes for x86
+	most of x64 procedures in ASM begin like this:
+		48 89 5c 24 08	 mov	 QWORD PTR[rsp + 8], rbx
+		48 89 74 24 10	 mov	 QWORD PTR[rsp + 16], rsi
+		57				 push	 rdi
+		48 83 ec 20		 sub	 rsp, 32; 00000020H
+	which makes it 15 bytes, for x86 you gotta check disassembly of beginning of function to see
+	how many bytes we can cut so it's more than 5 and includes whole instructions
+	*/
+	if (bits == 64 && sz < 12) sz = 15;
+	else if (bits == 32 && sz < 5) sz = 7;
 	unsigned char *ptr_old = (unsigned char*)oldfn;
 	unsigned char *ptr_new = (unsigned char*)newfn;
 	unsigned char *cave = (unsigned char*)malloc(sz + 64);
@@ -49,8 +60,7 @@ void* trampoline(void *oldfn, void *newfn, int sz, int bits) {
 	if (bits == 32) {
 		*IP = 0xE9; IP++;	// 0E9h = JMP
 		memcpy(IP, &jmpSz, sizeof(uintptr_t)); IP += sizeof(uintptr_t);
-	}
-	else if (bits == 64) {
+	} else if (bits == 64) {
 		//RAX is safe to use, 64bit __fastcall uses RCX, RDX, R8, R9 + stack on Windows
 
 		// MOVABS RAX, uint64_t
@@ -71,8 +81,7 @@ void* trampoline(void *oldfn, void *newfn, int sz, int bits) {
 		jmpSz = (ptr_new - (IP + 5));
 		*IP = 0xE9; IP++;
 		memcpy(IP, &jmpSz, sizeof(jmpSz));
-	}
-	else if (bits == 64) {
+	} else if (bits == 64) {
 		*IP = 0x48; IP++;
 		*IP = 0xB8; IP++;
 		memcpy(IP, &ptr_new, sizeof(void*));
