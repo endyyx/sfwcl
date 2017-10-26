@@ -198,11 +198,11 @@ void __fastcall DisconnectError(void *self, void *addr, EDisconnectionCause dc, 
 	hook((void*)pDisconnectError, (void*)DisconnectError);
 }
 int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
-	unhook(pGameUpdate);
-	int res = pGameUpdate(self, addr, p1, p2);
-	hook((void*)pGameUpdate, (void*)GameUpdate);
+	//unhook(pGameUpdate);
+	//int res = pGameUpdate(self, addr, p1, p2);
+	//hook((void*)pGameUpdate, (void*)GameUpdate);
 	OnUpdate(0.0f);
-	return res;
+	return pGameUpdate(self, addr, p1, p2);
 }
 int OnImpulse(const EventPhys *pEvent) {
 #ifdef WANT_CIRCLEJUMP
@@ -404,8 +404,8 @@ extern "C" {
 				pShowLoginScreen=(PFNSHLS)0x39230E00;
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
 
-				pGameUpdate = (PFNGU)0x390B5A40;
-				hook((void*)pGameUpdate, (void*)GameUpdate);
+				//pGameUpdate = (PFNGU)0x390B5A40;
+				pGameUpdate = (PFNGU)hookp((void*)0x390B5A40, (void*)pGameUpdate, 5);
 
 				pJoinServer=(PFNSHLS)0x3923D820;
 				hook((void*)pJoinServer,(void*)JoinServer);

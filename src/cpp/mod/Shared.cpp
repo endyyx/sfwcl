@@ -4,6 +4,7 @@
 #include <map>
 #include <WinInet.h>
 #include <time.h>
+#include <stdint.h>
 
 template <int T> struct StaticBuffer{
 	char content[T];
@@ -11,18 +12,74 @@ template <int T> struct StaticBuffer{
 
 std::map<void*,StaticBuffer<25> > hData;
 
-void* hookp(void *c,const void *d,const int sz){
-	char *a=(char*)c;
-	const char *b=(const char*)d;
-	char *cave=new char[sz+6];
-	memcpy(cave,a,sz);
-	*(cave+sz)=(char)0xE9;
-	*(long*)(cave+sz+1)=(a-cave)-5;
-	DWORD fl=0;
-	VirtualProtect(a,5,PAGE_READWRITE,&fl);
-	*a=(char)0xE9;
-	*(long*)(a+1)=b-a-5;
-	VirtualProtect(a,5,fl,&fl);
+void cpymem(void *a, void *b, int sz) {
+	for (int i = 0; i < sz; i++) {
+		((char*)a)[i] = ((char*)b)[i];
+	}
+}
+
+void print_mem(void *mem, int len) {
+	for (int i = 0; i < len; i++) {
+		printf("%02X ", ((unsigned char*)mem)[i] & 255);
+	}
+	printf("\n\n");
+}
+
+void* trampoline(void *oldfn, void *newfn, int sz, int bits) {
+	if (bits == 64 && sz < 12) sz += 12;
+	else if (bits == 32 && sz < 5) sz += 5;
+	unsigned char *ptr_old = (unsigned char*)oldfn;
+	unsigned char *ptr_new = (unsigned char*)newfn;
+	unsigned char *cave = (unsigned char*)malloc(sz + 64);
+	unsigned char *IP = cave;	//instruction pointer representation
+	unsigned char *IP_Dest = ptr_old + sz;
+	memset(cave, 0x90, sz + 64); //put some NOPs for safety first
+
+
+	DWORD flags;
+	VirtualProtect(cave, 4096, PAGE_EXECUTE_READWRITE, &flags);
+	VirtualProtect(ptr_old, 4096, PAGE_EXECUTE_READWRITE, &flags);
+
+	//Copy first sz bytes of original function to cave
+	cpymem(IP, ptr_old, sz);	//Weird, but MSVC crashes on memcpy here... gotta use this cpymem :-/
+	IP += sz;
+
+	//Calculate relative jump address
+	uintptr_t jmpSz = (IP_Dest)-(IP + 5);
+	if (bits == 32) {
+		*IP = 0xE9; IP++;	// 0E9h = JMP
+		memcpy(IP, &jmpSz, sizeof(uintptr_t)); IP += sizeof(uintptr_t);
+	}
+	else if (bits == 64) {
+		//RAX is safe to use, 64bit __fastcall uses RCX, RDX, R8, R9 + stack on Windows
+
+		// MOVABS RAX, uint64_t
+		*IP = 0x48; IP++;	//048h = MOVABS
+		*IP = 0xB8; IP++;	//0B8h = RAX
+		memcpy(IP, &IP_Dest, sizeof(void*));
+		IP += sizeof(void*);
+
+		//JMPABS RAX
+		*IP = 0xFF; IP++;	//0FFh = JMPABS	
+		*IP = 0xE0;			//0E0h = RAX
+	}
+
+	//Rewrite original function:
+	IP = ptr_old;
+	memset(IP, 0x90, sz);	//put some NOPs for safety first
+	if (bits == 32) {
+		jmpSz = (ptr_new - (IP + 5));
+		*IP = 0xE9; IP++;
+		memcpy(IP, &jmpSz, sizeof(jmpSz));
+	}
+	else if (bits == 64) {
+		*IP = 0x48; IP++;
+		*IP = 0xB8; IP++;
+		memcpy(IP, &ptr_new, sizeof(void*));
+		IP += sizeof(void*);
+		*IP = 0xFF; IP++;
+		*IP = 0xE0;
+	}
 	return (void*)(cave);
 }
 int getGameVer(const char *file){

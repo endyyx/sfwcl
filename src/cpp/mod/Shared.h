@@ -14,6 +14,14 @@
 #endif
 #endif
 
+#ifdef IS64
+typedef unsigned long long uintptr_t;
+#define ARCH_BITS 64
+#else
+typedef unsigned int uintptr_t;
+#define ARCH_BITS 32
+#endif
+
 #ifndef getField
 #define getField(type,base,offset) (*(type*)(((unsigned char*)base)+offset))
 #define GET_FIELD getField
@@ -88,7 +96,8 @@ asm(\
 	:"%eax","%edx","%ecx")
 #endif
 
-void* hookp(void *c,const void *d,const int sz);
+void* trampoline(void *oldfn, void *newfn, int sz, int bits = ARCH_BITS);
+#define hookp trampoline
 int getGameVer(const char*);
 void hook(void *src,void *dest);
 void unhook(void *src);
