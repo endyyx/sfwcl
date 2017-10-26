@@ -27,7 +27,7 @@ typedef unsigned int uintptr_t;
 #define GET_FIELD getField
 #endif
 
-#define MAX_ASYNC_QUEUE 65536
+#define MAX_ASYNC_QUEUE 6
 
 struct MENU_SCREEN {
 	void *PTR0;	//Virtual table pointer

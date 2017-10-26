@@ -212,6 +212,7 @@ int OnImpulse(const EventPhys *pEvent) {
 #endif
 }
 void OnUpdate(float frameTime) {
+	bool mtxLocked = false;
 	for (int i = 0; i < MAX_ASYNC_QUEUE; i++) {
 		g_mutex.Lock();
 		AsyncData *obj = asyncQueue[i];
@@ -358,8 +359,8 @@ extern "C" {
 				pGetMenuScreen = (PFNGMS)0x392F04B0;
 				pMenuIsLoaded = (PFNMIL)0x39340220;
 
-				pGameUpdate = (PFNGU)0x390BB5F0;
-				hook((void*)pGameUpdate, (void*)GameUpdate);
+				//pGameUpdate = (PFNGU)0x390BB5F0;
+				pGameUpdate = (PFNGU)hookp((void*)0x390BB5F0, (void*)GameUpdate, 15);
 
 				pShowLoginScreen=(PFNSHLS)0x393126B0;
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
@@ -405,7 +406,7 @@ extern "C" {
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
 
 				//pGameUpdate = (PFNGU)0x390B5A40;
-				pGameUpdate = (PFNGU)hookp((void*)0x390B5A40, (void*)pGameUpdate, 5);
+				pGameUpdate = (PFNGU)hookp((void*)0x390B5A40, (void*)GameUpdate, 7);
 
 				pJoinServer=(PFNSHLS)0x3923D820;
 				hook((void*)pJoinServer,(void*)JoinServer);
