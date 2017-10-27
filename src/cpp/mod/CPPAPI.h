@@ -66,8 +66,10 @@ struct AsyncData{
 	virtual void onUpdate() {}
 	virtual void postExec() {}
 	virtual int callAsync(IFunctionHandler *pH=0) {
+		extern unsigned int g_objectsInQueue;
 		extern Mutex g_mutex;
 		this->mutex = &g_mutex;
+		g_objectsInQueue++;
 		g_mutex.Lock();
 		extern HANDLE gEvent;
 		extern AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];

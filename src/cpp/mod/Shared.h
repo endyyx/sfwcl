@@ -1,7 +1,10 @@
 #ifndef SHARED_H
 #define SHARED_H
 
-#define THREAD_SAFE		//for mutexes
+//if enabled, mutexes will be used to ensure safe threading
+#define THREAD_SAFE		
+//if enabled, OnUpdate will be called in Lua only when async event finishes instead of every frame
+#define MAX_PERFORMANCE	
 
 #pragma comment(lib, "wininet")
 #pragma comment(lib, "wldap32")

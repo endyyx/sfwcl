@@ -59,6 +59,7 @@ int GAME_VER=6156;
 
 Mutex g_mutex;
 bool g_gameFilesWritable;
+unsigned int g_objectsInQueue=0;
 
 PFNLOGIN pLoginCave=0;
 PFNLOGIN pLoginSuccess=0;
@@ -212,8 +213,8 @@ int OnImpulse(const EventPhys *pEvent) {
 #endif
 }
 void OnUpdate(float frameTime) {
-	bool mtxLocked = false;
-	for (int i = 0; i < MAX_ASYNC_QUEUE; i++) {
+	bool eventFinished = false;
+	for (int i = 0; g_objectsInQueue && i < MAX_ASYNC_QUEUE; i++) {
 		g_mutex.Lock();
 		AsyncData *obj = asyncQueue[i];
 		if (obj) {
@@ -230,9 +231,10 @@ void OnUpdate(float frameTime) {
 				catch (std::exception& ex) {
 					printf("delete/Unhandled exception: %s", ex.what());
 				}
+				eventFinished = true;
+				g_objectsInQueue--;
 				asyncQueue[i] = 0;
-			}
-			else if (obj->executing) {
+			} else if (obj->executing) {
 				try {
 					obj->onUpdate();
 				}
@@ -243,10 +245,18 @@ void OnUpdate(float frameTime) {
 		}
 		g_mutex.Unlock();
 	}
-	IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
-	pScriptSystem->BeginCall("OnUpdate");
-	pScriptSystem->PushFuncParam(frameTime);
-	pScriptSystem->EndCall();
+	static unsigned int localCounter = 0;
+	if (eventFinished
+#ifndef MAX_PERFORMANCE
+		|| ((localCounter & 3) == 0)
+#endif
+		) {	//loop every fourth cycle to save some performance
+		IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
+		pScriptSystem->BeginCall("OnUpdate");
+		pScriptSystem->PushFuncParam(frameTime);
+		pScriptSystem->EndCall();
+	}
+	localCounter++;
 }
 #endif
 
@@ -484,6 +494,9 @@ extern "C" {
 		pPhysicalWorld->AddEventClient( 1,OnImpulse,0 );  
 #endif
 		pScriptSystem->SetGlobalValue("GAME_VER",version);
+#ifdef MAX_PERFORMANCE
+		pScriptSystem->SetGlobalValue("MAX_PERFORMANCE", true);
+#endif
 		if(!luaApi)
 			luaApi=new CPPAPI(pSystem,pGameFramework);
 		if(!socketApi)
