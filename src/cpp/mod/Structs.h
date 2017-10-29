@@ -1,8 +1,6 @@
 #ifndef STRUCTS_H
 #define STRUCTS_H
 #ifdef USE_SDK
-#include <CryModuleDefs.h>
-#include <CryMemoryManager_impl.h>
 #include <memory>
 
 struct SServerInfo 

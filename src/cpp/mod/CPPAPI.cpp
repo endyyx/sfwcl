@@ -5,7 +5,6 @@
 #include <IVehicleSystem.h>
 #include <IGameObjectSystem.h>
 #include <CryThread.h>
-#include <IScriptSystem.h>
 #include "AtomicCounter.h"
 //#include <mutex>
 //#include <functional>
