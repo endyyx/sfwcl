@@ -9,8 +9,6 @@
 #include <IConsole.h>
 #include <ILevelSystem.h>
 #include <I3DEngine.h>
-#include <IRenderer.h>
-#include <IRendererD3D9.h>
 #include <Windows.h>
 #include "Mutex.h"
 //#include <mutex>
