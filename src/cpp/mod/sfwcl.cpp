@@ -214,6 +214,7 @@ int OnImpulse(const EventPhys *pEvent) {
 }
 void OnUpdate(float frameTime) {
 	bool eventFinished = false;
+
 	for (int i = 0; g_objectsInQueue && i < MAX_ASYNC_QUEUE; i++) {
 		g_mutex.Lock();
 		AsyncData *obj = asyncQueue[i];

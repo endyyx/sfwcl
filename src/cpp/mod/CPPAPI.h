@@ -146,7 +146,7 @@ struct ConnectStruct : public AsyncData {
 		AsyncConnect(this->id, (AsyncData*)this);
 	}
 };
-struct DownloadMapStruct : public AsyncData{
+struct DownloadMapStruct : public AsyncData {
 	const char *mapn;
 	const char *mapdl;
 	bool success;
