@@ -10,19 +10,24 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithD
 set(CMAKE_USER_MAKE_RULES_OVERRIDE ${CMAKE_CURRENT_SOURCE_DIR}/cmake/msvc_c_flags_override.cmake)
 set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX ${CMAKE_CURRENT_SOURCE_DIR}/cmake/msvc_cxx_flags_override.cmake)
 
-project(sfwcl)
-
 # install target is not used here
 set(CMAKE_INSTALL_PREFIX "${PROJECT_BINARY_DIR}" CACHE INTERNAL "")
 
+project(sfwcl)
+
+if(NOT MSVC)
+	message(FATAL_ERROR "MSVC is the only supported compiler")
+endif()
+
+add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+
 option(SFWCL_DLL "Build sfwcl.dll" ON)
 if(SFWCL_DLL)
-	if(MSVC)
-		# Crysis SDK headers
-		include_directories(src/cpp/mod/CryEngine)
-	endif()
 	file(GLOB SFWCL_DLL_SOURCES src/cpp/mod/*.cpp)
 	add_library(sfwcl MODULE ${SFWCL_DLL_SOURCES})
+	# Crysis SDK headers
+	target_include_directories(sfwcl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp/mod/CryEngine)
+	target_compile_definitions(sfwcl PUBLIC -D_SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS)
 endif()
 
 # only Windows version of 7-zip creates valid .pak files
@@ -53,17 +58,11 @@ endif()
 option(SFWCL_PRECHECK "Build sfwcl_precheck.exe" ON)
 if(SFWCL_PRECHECK)
 	add_executable(sfwcl_precheck src/cpp/precheck/main.cpp)
-	if(MSVC)
-		# VS2010 and higher
-		if(MSVC_IDE AND (MSVC_VERSION GREATER_EQUAL 1600))
-			set_target_properties(sfwcl_precheck PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /level='requireAdministrator' /uiAccess='false'")
-		else()
-			set_target_properties(sfwcl_precheck PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\"")
-		endif()
+	# VS2010 and higher
+	if(MSVC_IDE AND (MSVC_VERSION GREATER_EQUAL 1600))
+		set_target_properties(sfwcl_precheck PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /level='requireAdministrator' /uiAccess='false'")
 	else()
-		target_sources(sfwcl_precheck PRIVATE cmake/uac.rc)
-		target_link_libraries(sfwcl_precheck shlwapi)
-		set_target_properties(sfwcl_precheck PROPERTIES LINK_FLAGS "-mwindows")
+		set_target_properties(sfwcl_precheck PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\"")
 	endif()
 endif()
 
@@ -91,26 +90,5 @@ if(SFWCL_MAPDL)
 	)
 	target_link_libraries(miniunz zlibstatic)
 	target_link_libraries(MapDownloader miniunz)
-	if(MSVC)
-		set_target_properties(MapDownloader PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS")
-	else()
-		set_target_properties(MapDownloader PROPERTIES LINK_FLAGS "-mwindows")
-	endif()
-endif()
-
-if(MSVC)
-	message(STATUS "Using MSVC compiler options")
-	add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-	add_definitions(-D_SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS)
-else()
-	message(STATUS "Using GNU compiler options")
-	mark_as_advanced(FORCE CMAKE_GNUtoMS)
-	set(SFWCL_MINGW_STATIC_FLAGS "-static-libstdc++ -static-libgcc")
-	option(SFWCL_MINGW_STATIC "Link with ${SFWCL_MINGW_STATIC_FLAGS}" ON)
-	if(SFWCL_MINGW_STATIC)
-		list(APPEND CMAKE_EXE_LINKER_FLAGS ${SFWCL_MINGW_STATIC_FLAGS})
-		list(APPEND CMAKE_MODULE_LINKER_FLAGS ${SFWCL_MINGW_STATIC_FLAGS})
-		list(APPEND CMAKE_SHARED_LINKER_FLAGS ${SFWCL_MINGW_STATIC_FLAGS})
-		list(APPEND CMAKE_STATIC_LINKER_FLAGS ${SFWCL_MINGW_STATIC_FLAGS})
-	endif()
+	set_target_properties(MapDownloader PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS")
 endif()
