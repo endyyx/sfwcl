@@ -1,9 +1,5 @@
 #include "Socket.h"
 #ifdef USE_SDK
-#include <IEntity.h>
-#include <IEntitySystem.h>
-#include <IVehicleSystem.h>
-#include <IGameObjectSystem.h>
 
 Socket::Socket(ISystem *pSystem, IGameFramework *pGameFramework)
 	:	m_pSystem(pSystem),

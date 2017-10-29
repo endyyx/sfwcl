@@ -1,5 +1,3 @@
-/*#include <MsXml2.h>
-#include <ExDisp.h>	//InternetExplorer!*/
 #include "Shared.h"
 #include <stdio.h>
 #include <string.h>
@@ -16,11 +14,13 @@
 #include <shellapi.h>
 
 #ifdef USE_SDK
-	typedef unsigned int uint;
+	#include <CryModuleDefs.h>
+	#include <platform_impl.h>
 	#include <IGameFramework.h>
 	#include <ISystem.h>
 	#include <IScriptSystem.h>
 	#include <IConsole.h>
+	#include <I3DEngine.h>
 	#include <IFont.h>
 	#include <IUIDraw.h>
 	#include <IFlashPlayer.h>
