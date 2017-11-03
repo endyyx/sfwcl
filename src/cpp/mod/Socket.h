@@ -17,7 +17,6 @@ public:
 	int send(IFunctionHandler *pH,int sock,const char *buffer,int len);
 	int recv(IFunctionHandler *pH,int sock,int len);
 	int error(IFunctionHandler *pH);
-	//int ClearLayer(IFunctionHandler* pH,int layer);
 protected:
 	void RegisterMethods();
 	ISystem				*m_pSystem;
