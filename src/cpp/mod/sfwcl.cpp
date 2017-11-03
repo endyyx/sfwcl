@@ -249,7 +249,6 @@ void OnUpdate(float frameTime) {
 	}
 	localCounter++;
 }
-#endif
 
 void MemScan(void *base,int size){
 	char buffer[81920]="";

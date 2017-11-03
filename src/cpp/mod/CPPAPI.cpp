@@ -105,7 +105,6 @@ int CPPAPI::GetMapName(IFunctionHandler *pH){
 	return pH->EndFunction(pGameFramework->GetLevelName());
 }
 int CPPAPI::DoAsyncChecks(IFunctionHandler *pH) {
-/*
 #ifdef DO_ASYNC_CHECKS
 	extern Mutex g_mutex;
 	IScriptTable *tbl = pScriptSystem->CreateTable();
@@ -135,11 +134,8 @@ int CPPAPI::DoAsyncChecks(IFunctionHandler *pH) {
 	SAFE_RELEASE(tbl);
 	return code;
 #else
-*/
 	return pH->EndFunction(0);
-/*
 #endif
-*/
 }
 int CPPAPI::MapAvailable(IFunctionHandler *pH,const char *_path){
 	char *ver=0;

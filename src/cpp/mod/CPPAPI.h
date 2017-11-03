@@ -93,13 +93,11 @@ struct AsyncData{
 		char outn[255];
 		sprintf(outn, "AsyncRet%d", (int)id);
 		pScriptSystem->SetGlobalAny(outn, val);
-/*
 #ifdef DO_ASYNC_CHECKS
 		g_mutex.Lock();
 		asyncRetVal[std::string(outn)] = what;
 		g_mutex.Unlock();
 #endif
-*/
 	}
 	AsyncData():
 		finished(false),

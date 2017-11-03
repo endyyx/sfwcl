@@ -5,6 +5,8 @@
 //if enabled, OnUpdate will be called in Lua only when async event finishes instead of every frame
 #define MAX_PERFORMANCE	
 
+//#define DO_ASYNC_CHECKS
+
 #pragma comment(lib, "wininet")
 #pragma comment(lib, "wldap32")
 #pragma comment(lib, "shell32")

@@ -4,7 +4,7 @@
 #include <map>
 #include <WinInet.h>
 #include <time.h>
-#include <stdint.h>
+//#include <stdint.h>
 
 template <int T> struct StaticBuffer{
 	char content[T];
