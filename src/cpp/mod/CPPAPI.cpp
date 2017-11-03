@@ -11,7 +11,7 @@
 
 #pragma region CPPAPI
 
-extern AsyncData *asyncQueue[MAX_ASYNC_QUEUE];
+extern AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
 extern int asyncQueueIdx;
 extern std::map<std::string, std::string> asyncRetVal;
 extern IScriptSystem *pScriptSystem;
