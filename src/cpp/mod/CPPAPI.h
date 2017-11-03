@@ -1,8 +1,6 @@
 #pragma once
-#ifndef CPPAPI_H
-#define CPPAPI_H
+
 #include "Shared.h"
-#ifdef USE_SDK
 #include <IGameFramework.h>
 #include <ISystem.h>
 #include <IScriptSystem.h>
@@ -12,6 +10,7 @@
 #include <Windows.h>
 #include "Mutex.h"
 #include "NetworkStuff.h"
+
 #pragma region CPPAPIDefinitions
 class CPPAPI : public CScriptableBase {
 public:
@@ -91,30 +90,25 @@ struct AsyncData{
 		char outn[255];
 		sprintf(outn, "AsyncRet%d", (int)id);
 		pScriptSystem->SetGlobalAny(outn, val);
+/*
 #ifdef DO_ASYNC_CHECKS
 		g_mutex.Lock();
 		asyncRetVal[std::string(outn)] = what;
 		g_mutex.Unlock();
 #endif
+*/
 	}
 	AsyncData():
 		finished(false),
 		executing(false){}
 };
 
-#ifdef IS6156DLL
-#define AsyncReturn(what)\
-	char outn[255];\
-	sprintf(outn,"AsyncRet%d",(int)id);\
-	gEnv->pSystem->GetIScriptSystem()->SetGlobalAny(outn,what)
-#else
 #define AsyncReturn(what)\
 	extern IScriptSystem *pScriptSystem;\
 	char outn[255];\
 	sprintf(outn,"AsyncRet%d",(int)id);\
 	pScriptSystem->SetGlobalAny(outn,what);\
 	asyncRetVal[std::string(outn)] = what
-#endif
 #define GetAsyncObj(type,name) type *name=(type*)asyncQueue[id]
 #define CreateAsyncCallLua(data)\
 	GetClosestFreeItem(asyncQueue,&asyncQueueIdx);\
@@ -204,5 +198,3 @@ struct DownloadMapStruct : public AsyncData {
 	}
 };
 #pragma endregion
-#endif
-#endif

@@ -1,6 +1,5 @@
 #pragma once
-#ifndef __MUTEX_H__
-#define __MUTEX_H__
+
 #define WIN32_LEAN_AND_MEAN
 #include "Shared.h"
 #include <Windows.h>
@@ -49,4 +48,3 @@ struct SimpleLock {
 			mptr->Unlock();
 	}
 };
-#endif

@@ -1,5 +1,4 @@
 #include "Socket.h"
-#ifdef USE_SDK
 
 Socket::Socket(ISystem *pSystem, IGameFramework *pGameFramework)
 	:	m_pSystem(pSystem),
@@ -71,5 +70,3 @@ int Socket::error(IFunctionHandler *pH){
 	LocalFree(lpMsgBuf);
 	return pH->EndFunction(str.c_str(),(int)dw);
 }
-
-#endif

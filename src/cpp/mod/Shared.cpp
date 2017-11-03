@@ -105,8 +105,8 @@ int getGameVer(const char *file){
 			return 5767; 
 		else if(c=='\b')
 			return 6729;
-		else return 0;
-	
+		else
+			return 0;
     }
 	return -1;
 }

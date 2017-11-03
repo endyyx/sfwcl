@@ -1,5 +1,4 @@
 #include "CPPAPI.h"
-#ifdef USE_SDK
 #include <IEntity.h>
 #include <IEntitySystem.h>
 #include <IVehicleSystem.h>
@@ -62,15 +61,9 @@ int CPPAPI::ToggleLoading(IFunctionHandler *pH, const char *text, bool loading, 
 	return pH->EndFunction(true);
 }
 int CPPAPI::FSetCVar(IFunctionHandler* pH,const char * cvar,const char *val){
-#ifdef IS6156DLL
-	if(gEnv->pConsole->GetCVar(cvar)!=NULL)
-		gEnv->pConsole->GetCVar(cvar)->ForceSet(val);
-	return pH->EndFunction(true);
-#else
 	if(ICVar *cVar=pConsole->GetCVar(cvar))
 		cVar->ForceSet(val);
 	return pH->EndFunction(true);
-#endif
 }
 int CPPAPI::Random(IFunctionHandler* pH){
 	static bool set=false;
@@ -109,13 +102,10 @@ int CPPAPI::GetLocalIP(IFunctionHandler* pH){
 	return pH->EndFunction();
 }
 int CPPAPI::GetMapName(IFunctionHandler *pH){
-#ifdef IS6156DLL
-	return pH->EndFunction(gEnv->pGame->GetIGameFramework()->GetLevelName());
-#else
 	return pH->EndFunction(pGameFramework->GetLevelName());
-#endif
 }
 int CPPAPI::DoAsyncChecks(IFunctionHandler *pH) {
+/*
 #ifdef DO_ASYNC_CHECKS
 	extern Mutex g_mutex;
 	IScriptTable *tbl = pScriptSystem->CreateTable();
@@ -145,8 +135,11 @@ int CPPAPI::DoAsyncChecks(IFunctionHandler *pH) {
 	SAFE_RELEASE(tbl);
 	return code;
 #else
+*/
 	return pH->EndFunction(0);
+/*
 #endif
+*/
 }
 int CPPAPI::MapAvailable(IFunctionHandler *pH,const char *_path){
 	char *ver=0;
@@ -411,4 +404,3 @@ void GetClosestFreeItem(AsyncData **in,int *out){
 	*out = idx.increment();
 }
 #pragma endregion
-#endif
