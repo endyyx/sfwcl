@@ -51,6 +51,9 @@ static void AsyncThread();
 void AsyncConnect(int id, AsyncData *obj);
 bool AsyncDownloadMap(int id, AsyncData *obj);
 inline void GetClosestFreeItem(AsyncData **in, int *out);
+#ifdef OLD_MSVC_DETECTED
+BOOL WINAPI DownloadMapStructEnumProc(HWND hwnd, LPARAM lParam);
+#endif
 
 struct AsyncData{
 	int id;
@@ -151,13 +154,17 @@ struct DownloadMapStruct : public AsyncData {
 		isAsync = false;
 		t = time(0) - 10;
 	}
+	struct Info {
+		HWND hWnd;
+		DWORD pid;
+	};
 	HWND GetHwnd(DWORD pid) {
-		struct Info {
-			HWND hWnd;
-			DWORD pid;
-		} info;
+		Info info;
 		info.pid = pid;
 		info.hWnd = 0;
+#ifdef OLD_MSVC_DETECTED
+		BOOL res = EnumWindows(DownloadMapStructEnumProc, (LPARAM)&info);
+#else
 		BOOL res = EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
 			Info *pParams = (Info*)(lParam);
 			DWORD processId;
@@ -168,7 +175,7 @@ struct DownloadMapStruct : public AsyncData {
 			}
 			return TRUE;
 		}, (LPARAM)&info);
-
+#endif
 		if (!res && GetLastError() == -1 && info.hWnd) {
 			return info.hWnd;
 		}

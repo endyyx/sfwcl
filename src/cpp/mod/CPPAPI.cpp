@@ -289,6 +289,18 @@ int CPPAPI::MsgBox(IFunctionHandler* pH,const char *text,const char *title,int b
 #pragma endregion
 
 #pragma region AsyncStuff
+#ifdef OLD_MSVC_DETECTED
+BOOL WINAPI DownloadMapStructEnumProc(HWND hwnd, LPARAM lParam) {
+	DownloadMapStruct::Info *pParams = (DownloadMapStruct::Info*)(lParam);
+	DWORD processId;
+	if (GetWindowThreadProcessId(hwnd, &processId) && processId == pParams->pid) {
+		SetLastError(-1);
+		pParams->hWnd = hwnd;
+		return FALSE;
+	}
+	return TRUE;
+}
+#endif
 bool DownloadMapFromObject(DownloadMapStruct *now) {
 	IRenderer *pRend = pSystem->GetIRenderer();
 	const char *mapn = now->mapn;
