@@ -194,9 +194,9 @@ void __fastcall DisconnectError(void *self, void *addr, EDisconnectionCause dc, 
 		pScriptSystem->PushFuncParam(serverMsg);
 		pScriptSystem->EndCall();
 	}
-	unhook(pDisconnectError);
+	//unhook(pDisconnectError);
 	pDisconnectError(self, addr, dc, connecting, serverMsg);
-	hook((void*)pDisconnectError, (void*)DisconnectError);
+	//hook((void*)pDisconnectError, (void*)DisconnectError);
 }
 int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
 	//unhook(pGameUpdate);
@@ -382,8 +382,10 @@ extern "C" {
 				pGetSelectedServer=(PFNGSS)0x39320D60;
 				hook((void*)pGetSelectedServer,(void*)GetSelectedServer);
 
-				pDisconnectError=(PFNDE)0x39315EB0; 
-				hook((void*)pDisconnectError,(void*)DisconnectError);
+				//pDisconnectError=(PFNDE)0x39315EB0; 
+				//hook((void*)pDisconnectError,(void*)DisconnectError);
+
+				pDisconnectError = (PFNDE)hookp((void*)0x39315EB0, (void*)DisconnectError, 12);
 #endif
 				break;
 			case 6729:
@@ -425,8 +427,9 @@ extern "C" {
 				pGetSelectedServer=(PFNGSS)0x3923BB70;
 				hook((void*)pGetSelectedServer,(void*)GetSelectedServer);
 
-				pDisconnectError=(PFNDE)0x39232D90;
-				hook((void*)pDisconnectError,(void*)DisconnectError);
+				//pDisconnectError=(PFNDE)0x39232D90;
+				//hook((void*)pDisconnectError,(void*)DisconnectError);
+				pDisconnectError = (PFNDE)hookp((void*)0x39232D90, (void*)DisconnectError, 7);
 #endif
 				break;
 			case 6729:
