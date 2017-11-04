@@ -13,36 +13,33 @@
 #include <Windows.h>
 #include <shellapi.h>
 
-#ifdef USE_SDK
-	#include <CryModuleDefs.h>
-	#include <platform_impl.h>
-	#include <IGameFramework.h>
-	#include <ISystem.h>
-	#include <IScriptSystem.h>
-	#include <IConsole.h>
-	#include <I3DEngine.h>
-	#include <IFont.h>
-	#include <IUIDraw.h>
-	#include <IFlashPlayer.h>
-	#include <WinSock2.h>
-	#include <ShlObj.h>
-	#include "CPPAPI.h"
-	#include "Socket.h"
-	#include "Structs.h"
-	CPPAPI *luaApi=0;
-	Socket *socketApi=0;
-	ISystem *pSystem=0;
-	IConsole *pConsole=0;
-	GAME_32_6156 *pGameGlobal=0;
-	IGame *pGame = 0;
-	IScriptSystem *pScriptSystem=0;
-	IGameFramework *pGameFramework=0;
-	IFlashPlayer *pFlashPlayer=0;
-	AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
-	std::map<std::string, std::string> asyncRetVal;
-	int asyncQueueIdx = 0;
-#endif
-
+#include <CryModuleDefs.h>
+#include <platform_impl.h>
+#include <IGameFramework.h>
+#include <ISystem.h>
+#include <IScriptSystem.h>
+#include <IConsole.h>
+#include <I3DEngine.h>
+#include <IFont.h>
+#include <IUIDraw.h>
+#include <IFlashPlayer.h>
+#include <WinSock2.h>
+#include <ShlObj.h>
+#include "CPPAPI.h"
+#include "Socket.h"
+#include "Structs.h"
+CPPAPI *luaApi=0;
+Socket *socketApi=0;
+ISystem *pSystem=0;
+IConsole *pConsole=0;
+GAME_32_6156 *pGameGlobal=0;
+IGame *pGame = 0;
+IScriptSystem *pScriptSystem=0;
+IGameFramework *pGameFramework=0;
+IFlashPlayer *pFlashPlayer=0;
+AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
+std::map<std::string, std::string> asyncRetVal;
+int asyncQueueIdx = 0;
 
 typedef void (__fastcall *PFNLOGIN)(void*,void*,const char*);		//HUD::OnLogin
 typedef void (__fastcall *PFNSHLS)(void*,void*);					//HUD::ShowLoginScreen
@@ -78,7 +75,6 @@ char SvMaster[255]="m.crymp.net";
 
 bool TestGameFilesWritable();
 
-#ifdef USE_SDK
 void OnUpdate(float frameTime);
 void CommandClMaster(IConsoleCmdArgs *pArgs){
 	if (pArgs->GetArgCount()>1)
@@ -205,13 +201,7 @@ int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
 	OnUpdate(0.0f);
 	return pGameUpdate(self, addr, p1, p2);
 }
-int OnImpulse(const EventPhys *pEvent) {
-#ifdef WANT_CIRCLEJUMP
-	return 1;
-#else
-	return 0;
-#endif
-}
+
 void OnUpdate(float frameTime) {
 	bool eventFinished = false;
 
@@ -259,7 +249,6 @@ void OnUpdate(float frameTime) {
 	}
 	localCounter++;
 }
-#endif
 
 void MemScan(void *base,int size){
 	char buffer[81920]="";
@@ -351,7 +340,7 @@ extern "C" {
 			case 5767:
 				fillNOP((void*)0x3968C719,6);
 				fillNOP((void*)0x3968C728,6);
-#ifdef USE_SDK
+
 				pShowLoginScreen=(PFNSHLS)0x39308250;
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
 
@@ -360,12 +349,12 @@ extern "C" {
 
 				pGetSelectedServer=(PFNGSS)0x39313C40;
 				hook((void*)pGetSelectedServer,(void*)GetSelectedServer);
-#endif
+
 				break;
 			case 6156:
 				fillNOP((void*)0x39689899,6);
 				fillNOP((void*)0x396898A8,6);
-#ifdef USE_SDK
+
 				pGetMenu = (PFNGM)0x390BB910;
 				pGetMenuScreen = (PFNGMS)0x392F04B0;
 				pMenuIsLoaded = (PFNMIL)0x39340220;
@@ -384,9 +373,7 @@ extern "C" {
 
 				//pDisconnectError=(PFNDE)0x39315EB0; 
 				//hook((void*)pDisconnectError,(void*)DisconnectError);
-
 				pDisconnectError = (PFNDE)hookp((void*)0x39315EB0, (void*)DisconnectError, 12);
-#endif
 				break;
 			case 6729:
 				fillNOP((void*)0x3968B0B9,6);
@@ -396,7 +383,7 @@ extern "C" {
 			case 5767:
 				fillNOP((void*)0x3953F4B7,2);
 				fillNOP((void*)0x3953F4C0,2);
-#ifdef USE_SDK
+
 				pShowLoginScreen=(PFNSHLS)0x3922A330;
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
 
@@ -405,12 +392,12 @@ extern "C" {
 
 				pGetSelectedServer=(PFNGSS)0x3922E650;
 				hook((void*)pGetSelectedServer,(void*)GetSelectedServer);
-#endif
+
 				break;
 			case 6156:
 				fillNOP((void*)0x3953FB7E,2);
 				fillNOP((void*)0x3953FB87,2);
-#ifdef USE_SDK
+
 				pGetMenu = (PFNGM)0x390B5CA0;
 				pGetMenuScreen = (PFNGMS)0x3921D310;
 				pMenuIsLoaded = (PFNMIL)0x39249410;
@@ -430,15 +417,14 @@ extern "C" {
 				//pDisconnectError=(PFNDE)0x39232D90;
 				//hook((void*)pDisconnectError,(void*)DisconnectError);
 				pDisconnectError = (PFNDE)hookp((void*)0x39232D90, (void*)DisconnectError, 7);
-#endif
 				break;
 			case 6729:
 				fillNOP((void*)0x3953FF89,2);
 				fillNOP((void*)0x3953FF92,2);
-#ifdef USE_SDK
+
 				pShowLoginScreen=(PFNSHLS)0x39230E00;
 				hook((void*)pShowLoginScreen,(void*)OnShowLoginScr);
-#endif
+
 				break;
 #endif
 		}
@@ -475,28 +461,14 @@ extern "C" {
 		patchMem(version);
 		hook(gethostbyname,Hook_GetHostByName);
 		g_gameFilesWritable = TestGameFilesWritable();
-#if !defined(USE_SDK)
-	#ifndef IS64
-		void *pSystem=0;
-		void *pScriptSystem=0;
-		void *tmp=0;
-		const char *idx="GAME_VER";
-		float ver=version;
-		mkcall(pSystem,ptr,64);
-		mkcall(pScriptSystem,pSystem,108);
-		mkcall2(tmp,pScriptSystem,84,idx,&ver);
-	#endif
-#else
+
 		pGameFramework=(IGameFramework*)ptr;
 		pSystem=pGameFramework->GetISystem();
 		pScriptSystem=pSystem->GetIScriptSystem();
 		pConsole=pSystem->GetIConsole();
-		pConsole->AddCommand("cl_master",CommandClMaster);
-		pConsole->AddCommand("reload_maps",CommandRldMaps);
-#ifdef WANT_CIRCLEJUMP
-		IPhysicalWorld *pPhysicalWorld=pSystem->GetIPhysicalWorld();
-		pPhysicalWorld->AddEventClient( 1,OnImpulse,0 );  
-#endif
+		pConsole->AddCommand("cl_master",CommandClMaster,VF_RESTRICTEDMODE);
+		pConsole->AddCommand("reload_maps",CommandRldMaps,VF_RESTRICTEDMODE);
+
 		pScriptSystem->SetGlobalValue("GAME_VER",version);
 #ifdef MAX_PERFORMANCE
 		pScriptSystem->SetGlobalValue("MAX_PERFORMANCE", true);
@@ -505,7 +477,7 @@ extern "C" {
 			luaApi=new CPPAPI(pSystem,pGameFramework);
 		if(!socketApi)
 			socketApi=new Socket(pSystem,pGameFramework);
-#endif
+
 		return pGame;
 	}
 }

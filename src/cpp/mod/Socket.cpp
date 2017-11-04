@@ -1,5 +1,4 @@
 #include "Socket.h"
-#ifdef USE_SDK
 
 Socket::Socket(ISystem *pSystem, IGameFramework *pGameFramework)
 	:	m_pSystem(pSystem),
@@ -67,9 +66,8 @@ int Socket::error(IFunctionHandler *pH){
         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
         (LPTSTR) &lpMsgBuf,
         0, NULL );
-	std::string str = std::to_string((long long)WSAGetLastError())+"/"+((const char*)lpMsgBuf);
+	static char buffer[256];  // thread-unsafe
+	_snprintf(buffer, sizeof(buffer), "%u/%s", WSAGetLastError(), (const char*)lpMsgBuf);
 	LocalFree(lpMsgBuf);
-	return pH->EndFunction(str.c_str(),(int)dw);
+	return pH->EndFunction(buffer,(int)dw);
 }
-
-#endif

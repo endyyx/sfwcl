@@ -1,11 +1,10 @@
 #pragma once
-#ifndef INET_CLASS
-#define INET_CLASS
+
 #include "Shared.h"
-#ifdef USE_SDK
 #include <string>
 #include <map>
 #include <Windows.h>
+
 namespace Network{
 	enum INetMethods{
 		INetGet=0xf25,INetPost,INetHTTP10,INetHTTP11
@@ -15,5 +14,3 @@ namespace Network{
 	void GetIP(const char*,char *);
 	char *GetIP(const char*);
 }
-#endif
-#endif

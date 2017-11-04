@@ -1,11 +1,10 @@
 #pragma once
-#ifndef SOCKET_H
-#define SOCKET_H
+
 #include "Shared.h"
-#ifdef USE_SDK
 #include <IGameFramework.h>
 #include <Windows.h>
 #include "NetworkStuff.h"
+
 #pragma region SocketDefs
 class Socket : public CScriptableBase {
 public:
@@ -27,6 +26,3 @@ extern IConsole *pConsole;
 extern IGameFramework *pGameFramework;
 extern ISystem *pSystem;
 #pragma endregion
-
-#endif
-#endif
