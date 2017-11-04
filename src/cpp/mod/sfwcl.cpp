@@ -466,8 +466,8 @@ extern "C" {
 		pSystem=pGameFramework->GetISystem();
 		pScriptSystem=pSystem->GetIScriptSystem();
 		pConsole=pSystem->GetIConsole();
-		pConsole->AddCommand("cl_master",CommandClMaster);
-		pConsole->AddCommand("reload_maps",CommandRldMaps);
+		pConsole->AddCommand("cl_master",CommandClMaster,VF_RESTRICTEDMODE);
+		pConsole->AddCommand("reload_maps",CommandRldMaps,VF_RESTRICTEDMODE);
 
 		pScriptSystem->SetGlobalValue("GAME_VER",version);
 #ifdef MAX_PERFORMANCE
