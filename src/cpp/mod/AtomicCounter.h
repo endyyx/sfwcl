@@ -1,6 +1,5 @@
 #pragma once
-#ifndef __ATOMIC_CTR_H__
-#define __ATOMIC_CTR_H__
+
 #include "Mutex.h"
 struct AtomicCounter {
 	Mutex *pMutex;
@@ -34,4 +33,3 @@ struct AtomicCounter {
 		return val;
 	}
 };
-#endif

@@ -1,8 +1,6 @@
 #pragma once
-#ifndef CPPAPI_H
-#define CPPAPI_H
+
 #include "Shared.h"
-#ifdef USE_SDK
 #include <IGameFramework.h>
 #include <ISystem.h>
 #include <IScriptSystem.h>
@@ -12,6 +10,7 @@
 #include <Windows.h>
 #include "Mutex.h"
 #include "NetworkStuff.h"
+
 #pragma region CPPAPIDefinitions
 class CPPAPI : public CScriptableBase {
 public:
@@ -52,6 +51,9 @@ static void AsyncThread();
 void AsyncConnect(int id, AsyncData *obj);
 bool AsyncDownloadMap(int id, AsyncData *obj);
 inline void GetClosestFreeItem(AsyncData **in, int *out);
+#ifdef OLD_MSVC_DETECTED
+BOOL WINAPI DownloadMapStructEnumProc(HWND hwnd, LPARAM lParam);
+#endif
 
 struct AsyncData{
 	int id;
@@ -102,19 +104,12 @@ struct AsyncData{
 		executing(false){}
 };
 
-#ifdef IS6156DLL
-#define AsyncReturn(what)\
-	char outn[255];\
-	sprintf(outn,"AsyncRet%d",(int)id);\
-	gEnv->pSystem->GetIScriptSystem()->SetGlobalAny(outn,what)
-#else
 #define AsyncReturn(what)\
 	extern IScriptSystem *pScriptSystem;\
 	char outn[255];\
 	sprintf(outn,"AsyncRet%d",(int)id);\
 	pScriptSystem->SetGlobalAny(outn,what);\
 	asyncRetVal[std::string(outn)] = what
-#endif
 #define GetAsyncObj(type,name) type *name=(type*)asyncQueue[id]
 #define CreateAsyncCallLua(data)\
 	GetClosestFreeItem(asyncQueue,&asyncQueueIdx);\
@@ -157,13 +152,17 @@ struct DownloadMapStruct : public AsyncData {
 		isAsync = false;
 		t = time(0) - 10;
 	}
+	struct Info {
+		HWND hWnd;
+		DWORD pid;
+	};
 	HWND GetHwnd(DWORD pid) {
-		struct Info {
-			HWND hWnd;
-			DWORD pid;
-		} info;
+		Info info;
 		info.pid = pid;
 		info.hWnd = 0;
+#ifdef OLD_MSVC_DETECTED
+		BOOL res = EnumWindows(DownloadMapStructEnumProc, (LPARAM)&info);
+#else
 		BOOL res = EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
 			Info *pParams = (Info*)(lParam);
 			DWORD processId;
@@ -174,7 +173,7 @@ struct DownloadMapStruct : public AsyncData {
 			}
 			return TRUE;
 		}, (LPARAM)&info);
-
+#endif
 		if (!res && GetLastError() == -1 && info.hWnd) {
 			return info.hWnd;
 		}
@@ -208,5 +207,3 @@ struct DownloadMapStruct : public AsyncData {
 	}
 };
 #pragma endregion
-#endif
-#endif

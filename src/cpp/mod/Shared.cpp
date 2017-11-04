@@ -4,7 +4,7 @@
 #include <map>
 #include <WinInet.h>
 #include <time.h>
-#include <stdint.h>
+//#include <stdint.h>
 
 template <int T> struct StaticBuffer{
 	char content[T];
@@ -105,8 +105,8 @@ int getGameVer(const char *file){
 			return 5767; 
 		else if(c=='\b')
 			return 6729;
-		else return 0;
-	
+		else
+			return 0;
     }
 	return -1;
 }

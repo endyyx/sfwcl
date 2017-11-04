@@ -1,5 +1,4 @@
 #include "NetworkStuff.h"
-#ifdef USE_SDK
 #include <wininet.h>
 #include <fstream>
 #include <sstream>
@@ -37,9 +36,7 @@ namespace Network{
 				}
 			}
 			catch (std::exception& ex) {
-			#if _MSC_VER
 				UNREFERENCED_PARAMETER(ex);
-			#endif
 				script = page;
 				params = "";
 			}
@@ -134,4 +131,3 @@ namespace Network{
 		}
 	}
 }
-#endif

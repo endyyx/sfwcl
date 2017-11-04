@@ -1,5 +1,4 @@
 #include "CPPAPI.h"
-#ifdef USE_SDK
 #include <IEntity.h>
 #include <IEntitySystem.h>
 #include <IVehicleSystem.h>
@@ -62,15 +61,9 @@ int CPPAPI::ToggleLoading(IFunctionHandler *pH, const char *text, bool loading, 
 	return pH->EndFunction(true);
 }
 int CPPAPI::FSetCVar(IFunctionHandler* pH,const char * cvar,const char *val){
-#ifdef IS6156DLL
-	if(gEnv->pConsole->GetCVar(cvar)!=NULL)
-		gEnv->pConsole->GetCVar(cvar)->ForceSet(val);
-	return pH->EndFunction(true);
-#else
 	if(ICVar *cVar=pConsole->GetCVar(cvar))
 		cVar->ForceSet(val);
 	return pH->EndFunction(true);
-#endif
 }
 int CPPAPI::Random(IFunctionHandler* pH){
 	static bool set=false;
@@ -109,11 +102,7 @@ int CPPAPI::GetLocalIP(IFunctionHandler* pH){
 	return pH->EndFunction();
 }
 int CPPAPI::GetMapName(IFunctionHandler *pH){
-#ifdef IS6156DLL
-	return pH->EndFunction(gEnv->pGame->GetIGameFramework()->GetLevelName());
-#else
 	return pH->EndFunction(pGameFramework->GetLevelName());
-#endif
 }
 int CPPAPI::DoAsyncChecks(IFunctionHandler *pH) {
 #ifdef DO_ASYNC_CHECKS
@@ -296,6 +285,18 @@ int CPPAPI::MsgBox(IFunctionHandler* pH,const char *text,const char *title,int b
 #pragma endregion
 
 #pragma region AsyncStuff
+#ifdef OLD_MSVC_DETECTED
+BOOL WINAPI DownloadMapStructEnumProc(HWND hwnd, LPARAM lParam) {
+	DownloadMapStruct::Info *pParams = (DownloadMapStruct::Info*)(lParam);
+	DWORD processId;
+	if (GetWindowThreadProcessId(hwnd, &processId) && processId == pParams->pid) {
+		SetLastError(-1);
+		pParams->hWnd = hwnd;
+		return FALSE;
+	}
+	return TRUE;
+}
+#endif
 bool DownloadMapFromObject(DownloadMapStruct *now) {
 	IRenderer *pRend = pSystem->GetIRenderer();
 	const char *mapn = now->mapn;
@@ -411,4 +412,3 @@ void GetClosestFreeItem(AsyncData **in,int *out){
 	*out = idx.increment();
 }
 #pragma endregion
-#endif

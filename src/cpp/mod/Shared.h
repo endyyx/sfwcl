@@ -1,10 +1,11 @@
-#ifndef SHARED_H
-#define SHARED_H
+#pragma once
 
 //if enabled, mutexes will be used to ensure safe threading
 #define THREAD_SAFE		
 //if enabled, OnUpdate will be called in Lua only when async event finishes instead of every frame
 #define MAX_PERFORMANCE	
+
+//#define DO_ASYNC_CHECKS
 
 #pragma comment(lib, "wininet")
 #pragma comment(lib, "wldap32")
@@ -60,44 +61,11 @@ struct GAME_32_6156 {
 	FLASH_OBJ_32_6156 *pFlashObj;
 };
 
-/* Trying to compile the headers from SDK => 4MB error log @ G++ */
-#ifdef _MSC_VER
-	#define USE_SDK
-	#if _MSC_VER <= 1600  // VS2010 and older
-		#define OLD_MSVC_DETECTED  // almost no C++11 support
-	#endif
+#if _MSC_VER <= 1600  // VS2010 and older
+#define OLD_MSVC_DETECTED  // almost no C++11 support
 #endif
 
 void ToggleLoading(const char *text, bool loading = true, bool reset = true);
-
-#ifdef USE_SDK
-//#define WANT_CIRCLEJUMP
-#define mkcall(r,s,o)	/* do nothing */
-#define mkcall2(r,s,o,p1,p2)	/* do nothing */
-#else
-#define mkcall(r,s,o)\
-asm(\
-	"movl (%1),%%eax\n"\
-	"movl "#o"(%%eax),%%edx\n"\
-	"movl %1,%%ecx\n"\
-	"call %%edx\n"\
-	"movl %%eax,%0\n"\
-	:"=r"(r)\
-	:"r"(s)\
-	:"%eax","%edx","%ecx")
-#define mkcall2(r,s,o,p1,p2)\
-asm(\
-	"movl (%1),%%eax\n"\
-	"movl "#o"(%%eax),%%edx\n"\
-	"movl %1,%%ecx\n"\
-	"pushl %3\n"\
-	"pushl %2\n"\
-	"call %%edx\n"\
-	"movl %%eax,%0\n"\
-	:"=r"(r)\
-	:"r"(s),"r"(p1),"r"(p2)\
-	:"%eax","%edx","%ecx")
-#endif
 
 void* trampoline(void *oldfn, void *newfn, int sz, int bits = ARCH_BITS);
 #define hookp trampoline
@@ -107,5 +75,3 @@ void unhook(void *src);
 #include <string>
 std::string fastDownload(const char *url);
 bool autoUpdateClient();
-
-#endif SHARED_H
