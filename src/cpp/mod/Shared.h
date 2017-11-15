@@ -61,6 +61,10 @@ struct GAME_32_6156 {
 	FLASH_OBJ_32_6156 *pFlashObj;
 };
 
+
+typedef void(__cdecl *PFNSETUPDATEPROGRESSCALLBACK)(void *);		//MapDownloader::SetUpdateProgressCallback
+typedef int(__cdecl *PFNDOWNLOADMAP)(const char *, const char *, const char *);
+
 #if _MSC_VER <= 1600  // VS2010 and older
 #define OLD_MSVC_DETECTED  // almost no C++11 support
 #endif

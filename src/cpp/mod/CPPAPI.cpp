@@ -5,6 +5,7 @@
 #include <IGameObjectSystem.h>
 #include <CryThread.h>
 #include "AtomicCounter.h"
+#include "Atomic.h"
 //#include <mutex>
 //#include <functional>
 
@@ -314,35 +315,44 @@ bool DownloadMapFromObject(DownloadMapStruct *now) {
 		cwd[last] = 0;
 	char params[5120];
 	sprintf(cwd, "%s\\..\\SfwClFiles\\", cwd);
-	sprintf_s(params, "\"%s\" \"%s\" \"%s\"", mapn, mapdl, cwd);
-	SHELLEXECUTEINFOA info;
-	ZeroMemory(&info, sizeof(SHELLEXECUTEINFOA));
-	info.lpDirectory = cwd;
-	info.lpParameters = params;
-	extern bool g_gameFilesWritable;
-	///TODO: if g_gameFilesWritable -> MapDownloader.exe; else -> MapDownloaderUAC.exe
-	info.lpFile = "MapDownloader.exe";
-	if(now->isAsync)
-		info.nShow = SW_SHOW;
-	else info.nShow = SW_HIDE;
-	info.cbSize = sizeof(SHELLEXECUTEINFOA);
-	info.fMask = SEE_MASK_NOCLOSEPROCESS;
-	info.hwnd = 0;
-	//MessageBoxA(0,cwd,0,0);
-	if (!ShellExecuteExA(&info)) {
-		printf("\nFailed to start map downloader, error code %d\n", GetLastError());
-		while (getchar() != '\n') {}
-		return false;
-	}
-	now->hProcess = info.hProcess;
-	
-	WaitForSingleObject(info.hProcess, INFINITE);
-	DWORD exitCode;
+	extern PFNDOWNLOADMAP pfnDownloadMap;
 	bool ret = true;
-	if (GetExitCodeProcess(info.hProcess, &exitCode)) {
-		if (exitCode != 0) {
-			printf("\nFailed to download map, error code: %d\n", (int)exitCode);
-			ret = false;
+	if (pfnDownloadMap) {
+		extern Atomic<const char*> mapDlMessage;
+		mapDlMessage.set(0);
+		int code = pfnDownloadMap(mapn, mapdl, cwd);
+		if (code) ret = false;
+	} else {
+		sprintf_s(params, "\"%s\" \"%s\" \"%s\"", mapn, mapdl, cwd);
+		SHELLEXECUTEINFOA info;
+		ZeroMemory(&info, sizeof(SHELLEXECUTEINFOA));
+		info.lpDirectory = cwd;
+		info.lpParameters = params;
+		extern bool g_gameFilesWritable;
+		///TODO: if g_gameFilesWritable -> MapDownloader.exe; else -> MapDownloaderUAC.exe
+		info.lpFile = "MapDownloader.exe";
+		if (now->isAsync)
+			info.nShow = SW_HIDE;
+		else info.nShow = SW_SHOW;
+		info.cbSize = sizeof(SHELLEXECUTEINFOA);
+		info.fMask = SEE_MASK_NOCLOSEPROCESS;
+		info.hwnd = 0;
+		//MessageBoxA(0,cwd,0,0);
+		if (!ShellExecuteExA(&info)) {
+			printf("\nFailed to start map downloader, error code %d\n", GetLastError());
+			while (getchar() != '\n') {}
+			return false;
+		}
+		now->hProcess = info.hProcess;
+
+		WaitForSingleObject(info.hProcess, INFINITE);
+		DWORD exitCode;
+		ret = true;
+		if (GetExitCodeProcess(info.hProcess, &exitCode)) {
+			if (exitCode != 0) {
+				printf("\nFailed to download map, error code: %d\n", (int)exitCode);
+				ret = false;
+			}
 		}
 	}
 	ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();

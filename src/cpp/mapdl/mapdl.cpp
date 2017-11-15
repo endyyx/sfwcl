@@ -1,3 +1,8 @@
+#ifdef _USRDLL 
+#define MAKE_DLL
+#endif
+#define _CRT_SECURE_NO_WARNINGS
+
 #include <Windows.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,6 +16,20 @@
 #include <map>
 #include "unzip.h"
 
+#pragma comment(lib,"miniunz")
+#pragma comment(lib,"zlibstatic")
+
+#ifdef MAKE_DLL
+#undef SendMessage
+#define SendMessage /* do nothing */
+#undef SetWindowText
+#define SetWindowText(a,b) UpdateDLLProgress(a,b,false)
+#ifdef MessageBoxA
+#undef MessageBoxA
+#endif
+#define MessageBoxA(a,b,c,d) UpdateDLLProgress(a,b,true)
+#endif
+
 bool actAsUpdater = false;
 
 #pragma comment(lib,"Ws2_32")
@@ -18,18 +37,24 @@ bool actAsUpdater = false;
 using namespace std;
 
 static char pbuffer[512];
+char *msgbuffer = 0;
 
 int gRETCODE=-1;
 
+typedef void(__stdcall *PFNUPDATEPROGRESS)(const char*, bool);
+
 int doUnzip(char *,char *);
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+void UpdateDLLProgress(HWND handle, const char *text, bool error);
 int WorkerThread(void*);
 HINSTANCE hInst;
-HWND gHwnd;
-HWND hProgress;
-HWND hInfo;
+HWND gHwnd = 0;
+HWND hProgress = (HWND)1;
+HWND hInfo = (HWND)1;
+PFNUPDATEPROGRESS pfnUpdateProgress = 0;
+const char *g_mapName = 0, *g_mapPath = 0, *g_cwd = 0;
 
-class StatusCallback : public IBindStatusCallback{
+class StatusCallback : public IBindStatusCallback {
 public:
 	HRESULT __stdcall QueryInterface(const IID &,void **) {
         return E_NOINTERFACE;
@@ -75,17 +100,16 @@ public:
 				double toDown=progMax-prog;
 				int estimated=99*60+99;
 				if(dnSpeed>0) estimated=(int)((toDown/1024)/dnSpeed);
-				if(prog<progMax)
-					for(int i=0;i<len;i++)
+				if (prog < progMax) {
+					for (int i = 0; i < len; i++)
 						printf("\b \b");
+				}
 				float dividor=1;
 				if(progMax>25000){
 					dividor=progMax/25000.0f;
 					prog=(int)((float)prog/dividor);
 					progMax=25000;
 				}
-				SendMessageA(hProgress, PBM_SETRANGE, 0, MAKELPARAM(0,progMax));
-				SendMessageA(hProgress, PBM_SETPOS, prog, 0); 
 				char progstr[255];
 				char units[]="KMGT";
 				char unit=units[0];
@@ -94,9 +118,13 @@ public:
 					unit=units[++unitAt];
 					dnSpeed/=1024.0f;
 				}
+
+				SendMessageA(hProgress, PBM_SETRANGE, 0, MAKELPARAM(0, progMax));
+				SendMessageA(hProgress, PBM_SETPOS, prog, 0);
 				sprintf(progstr,"Downloading map %3.2f %% (%6.2f %ciB/s, %02d:%02d)",per,dnSpeed,unit,estimated/60,estimated%60);
-				SetWindowTextA(gHwnd,progstr);
-				SetWindowTextA(hInfo,progstr);
+				SetWindowText(gHwnd,progstr);
+				SetWindowText(hInfo,progstr);
+
 				//len=printf("%.2f%% (%.1f kB/s, estimated time %02d:%02d)",per,dnSpeed,estimated/60,estimated%60);
 			}
 		} else if(prog==progMax && progMax>0){
@@ -107,6 +135,15 @@ public:
 		return S_OK;
 	}
 };
+
+void UpdateDLLProgress(HWND handle, const char *text, bool error) {
+	//if (handle == gHwnd) {
+		if (pfnUpdateProgress && msgbuffer) {
+			strcpy(msgbuffer, text);
+			pfnUpdateProgress(msgbuffer, error);
+		}
+	//}
+}
 
 char *mklink(char *p,char *w,int *stg=0){
 	char *v=w;
@@ -155,6 +192,7 @@ bool IsProcessActive(const char *proc){
 	return false;
 }
 
+#ifndef MAKE_DLL
 int WINAPI WinMain(HINSTANCE hInstance,HINSTANCE hPrv,LPSTR cmdLine,int nCmdShow){
 	actAsUpdater = __argc>=2 && !strcmp(__argv[1],"update");
 	hInst=hInstance;
@@ -197,117 +235,6 @@ int WINAPI WinMain(HINSTANCE hInstance,HINSTANCE hPrv,LPSTR cmdLine,int nCmdShow
     }
 	return gRETCODE;
 }
-int doUnzip(char *fpath,char *path){
-	SendMessageA(hProgress, PBM_SETRANGE, 20, MAKELPARAM(0, 100)); 
-	SendMessageA(hProgress, PBM_SETSTEP, 1, 0);
-	SendMessageA(hProgress, PBM_STEPIT, 0,0);
-	int retCode=0;
-	unzFile f=unzOpen(fpath);
-	unz_global_info global_info;
-	if (unzGetGlobalInfo(f,&global_info)!=UNZ_OK){
-		unzClose(f);
-		printf("\nFailed to get ZIP file info, error: %s\n",strerror(errno));
-		while (getchar()!='\n') {}
-		retCode = 4; goto _end_;
-	}
-	char read_buffer[16384];
-	uLong i;
-	SetWindowText(gHwnd,"Decompressing archive...");
-	for ( i = 0; i < global_info.number_entry; ++i )
-	{
-		unz_file_info file_info;
-		char filename[255];
-		if(unzGetCurrentFileInfo(f,&file_info,filename,255,NULL,0,NULL,0)!=UNZ_OK){
-			unzClose(f);
-			printf("\nFailed to get ZIP file info, error: %s\n",strerror(errno));
-			while (getchar()!='\n') {}
-			retCode = 4; goto _end_;
-		}
-		char tmpfname[255];
-		const size_t filename_length = strlen( filename );
-		if(filename_length>16){
-			sprintf_s(tmpfname,"...%s",filename+(filename_length-16));
-		} else strncpy(tmpfname,filename,255);
-		char cdcmd[255];
-		sprintf(cdcmd,actAsUpdater?"%s\\..\\Mods\\":"%s\\..\\Game\\",path);
-		//system(cdcmd);
-		SetCurrentDirectory(cdcmd);
-		if (filename[filename_length-1]=='\\' || filename[filename_length-1]=='/'){
-			printf("Extracting directory: %s\n",mklink(path,filename));
-			_mkdir(mklink(path,filename));
-		} else {
-			int stage=0;
-			char *exn=mklink(path,filename,&stage);
-			if(!exn){
-				printf("Removing potentionally dangerous file: %s\n",filename);
-			} else {
-				printf( "Extracting file (st: %d): %s\n",stage,exn);
-				if (unzOpenCurrentFile(f)!=UNZ_OK){
-					unzClose(f);
-					printf("\nFailed to open the file, error: %s\n",strerror(errno));
-					while (getchar()!='\n') {}
-					retCode = 5; goto _end_;
-				}
-				FILE *out=fopen((mklink(path,filename)),"wb");
-				if (!out){
-					unzCloseCurrentFile(f);
-					unzClose(f);
-					printf("\nFailed to output the file, error: %s\n",strerror(errno));
-					while (getchar()!='\n') {}
-					retCode = 6; goto _end_;
-				}
-				int error=UNZ_OK;
-				float dividor=1.0f;
-				int stepsz=16384;
-				int fsz=file_info.uncompressed_size;
-				if(fsz>25000){
-					dividor=fsz/25000.0f;
-					stepsz=(int)((float)stepsz/dividor);
-				}
-				SendMessageA(hProgress, PBM_SETRANGE, 0, MAKELPARAM(0,fsz)); 
-				SendMessageA(hProgress, PBM_SETSTEP, stepsz,0);
-				char infoMsg[255];
-				float state=0;
-				sprintf(infoMsg,"Extracting %s - 0.00%%",tmpfname);
-				SetWindowText(hInfo,infoMsg);
-				do{
-					error = unzReadCurrentFile( f, read_buffer, 16384 );
-					if (error<0){
-						unzCloseCurrentFile(f);
-						unzClose(f);
-						printf("\nFailed to read the file, error: %s\n",strerror(errno));
-						while (getchar()!='\n') {}
-						retCode = 7; goto _end_;
-					}
-					if (error>0)
-						fwrite( read_buffer, error, 1, out );
-					SendMessageA(hProgress, PBM_STEPIT, 0, 0); 
-					state+=16384;
-					if(state>file_info.uncompressed_size)
-						state=(float)file_info.uncompressed_size;
-					float per=100*state/file_info.uncompressed_size;
-					sprintf(infoMsg,"Extracting %s - %.2f%%",tmpfname,per);
-					SetWindowText(hInfo,infoMsg);
-				} while (error>0);
-				fclose(out);
-			}
-		}
-		unzCloseCurrentFile(f);
-		if ((i+1)<global_info.number_entry){
-			if(unzGoToNextFile(f)!=UNZ_OK){
-				unzClose(f);
-				printf("\nFailed to find next file, error: %s\n",strerror(errno));
-				while (getchar()!='\n') {}
-				retCode = 8; goto _end_;
-			}
-		}
-	}
-	SendMessage(hProgress,PBM_SETRANGE,0,MAKELPARAM(0,100));
-	SendMessage(hProgress,PBM_SETPOS,100,0);
-	_end_:
-	unzClose(f);
-	return retCode;
-}
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam){
 	HWND spam=0;
     switch(msg){
@@ -342,13 +269,156 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam){
     }
     return 0;
 }
+#else
+extern "C" {
+	__declspec(dllexport) void __cdecl SetUpdateProgressCallback(void *ptr) {
+		pfnUpdateProgress = (PFNUPDATEPROGRESS)ptr;
+	}
+	__declspec(dllexport) int __cdecl DownloadMap(const char *mapName, const char *mapPath, const char *cwd) {
+		if (!msgbuffer) {
+			msgbuffer = new char[65536];
+		}
+		g_mapName = mapName;
+		g_mapPath = mapPath;
+		g_cwd = cwd;
+		//CreateThread(0, 0, (LPTHREAD_START_ROUTINE)WorkerThread, 0, 0, 0);
+		return WorkerThread(0);
+	}
+}
+#endif
+int doUnzip(char *fpath, char *path) {
+
+	SendMessageA(hProgress, PBM_SETRANGE, 20, MAKELPARAM(0, 100));
+	SendMessageA(hProgress, PBM_SETSTEP, 1, 0);
+	SendMessageA(hProgress, PBM_STEPIT, 0, 0);
+
+	int retCode = 0;
+	unzFile f = unzOpen(fpath);
+	unz_global_info global_info;
+	if (unzGetGlobalInfo(f, &global_info) != UNZ_OK) {
+		unzClose(f);
+		printf("\nFailed to get ZIP file info, error: %s\n", strerror(errno));
+		while (getchar() != '\n') {}
+		retCode = 4; goto _end_;
+	}
+	char read_buffer[16384];
+	uLong i;
+	SetWindowText(gHwnd, "Decompressing archive...");
+	for (i = 0; i < global_info.number_entry; ++i)
+	{
+		unz_file_info file_info;
+		char filename[255];
+		if (unzGetCurrentFileInfo(f, &file_info, filename, 255, NULL, 0, NULL, 0) != UNZ_OK) {
+			unzClose(f);
+			printf("\nFailed to get ZIP file info, error: %s\n", strerror(errno));
+			while (getchar() != '\n') {}
+			retCode = 4; goto _end_;
+		}
+		char tmpfname[255];
+		const size_t filename_length = strlen(filename);
+		if (filename_length>16) {
+			sprintf_s(tmpfname, "...%s", filename + (filename_length - 16));
+		}
+		else strncpy(tmpfname, filename, 255);
+		char cdcmd[255];
+		sprintf(cdcmd, actAsUpdater ? "%s\\..\\Mods\\" : "%s\\..\\Game\\", path);
+		//system(cdcmd);
+		SetCurrentDirectory(cdcmd);
+		if (filename[filename_length - 1] == '\\' || filename[filename_length - 1] == '/') {
+			printf("Extracting directory: %s\n", mklink(path, filename));
+			_mkdir(mklink(path, filename));
+		}
+		else {
+			int stage = 0;
+			char *exn = mklink(path, filename, &stage);
+			if (!exn) {
+				printf("Removing potentionally dangerous file: %s\n", filename);
+			}
+			else {
+				printf("Extracting file (st: %d): %s\n", stage, exn);
+				if (unzOpenCurrentFile(f) != UNZ_OK) {
+					unzClose(f);
+					printf("\nFailed to open the file, error: %s\n", strerror(errno));
+					while (getchar() != '\n') {}
+					retCode = 5; goto _end_;
+				}
+				FILE *out = fopen((mklink(path, filename)), "wb");
+				if (!out) {
+					unzCloseCurrentFile(f);
+					unzClose(f);
+					printf("\nFailed to output the file, error: %s\n", strerror(errno));
+					while (getchar() != '\n') {}
+					retCode = 6; goto _end_;
+				}
+				int error = UNZ_OK;
+				float dividor = 1.0f;
+				int stepsz = 16384;
+				int fsz = file_info.uncompressed_size;
+				if (fsz>25000) {
+					dividor = fsz / 25000.0f;
+					stepsz = (int)((float)stepsz / dividor);
+				}
+
+				SendMessageA(hProgress, PBM_SETRANGE, 0, MAKELPARAM(0, fsz));
+				SendMessageA(hProgress, PBM_SETSTEP, stepsz, 0);
+
+				char infoMsg[255];
+				float state = 0;
+				sprintf(infoMsg, "Extracting %s - 0.00%%", tmpfname);
+				SetWindowText(hInfo, infoMsg);
+				do {
+					error = unzReadCurrentFile(f, read_buffer, 16384);
+					if (error<0) {
+						unzCloseCurrentFile(f);
+						unzClose(f);
+						printf("\nFailed to read the file, error: %s\n", strerror(errno));
+						while (getchar() != '\n') {}
+						retCode = 7; goto _end_;
+					}
+					if (error>0)
+						fwrite(read_buffer, error, 1, out);
+					SendMessageA(hProgress, PBM_STEPIT, 0, 0);
+					state += 16384;
+					if (state>file_info.uncompressed_size)
+						state = (float)file_info.uncompressed_size;
+					float per = 100 * state / file_info.uncompressed_size;
+					sprintf(infoMsg, "Extracting %s - %.2f%%", tmpfname, per);
+					SetWindowText(hInfo, infoMsg);
+				} while (error>0);
+				fclose(out);
+			}
+		}
+		unzCloseCurrentFile(f);
+		if ((i + 1)<global_info.number_entry) {
+			if (unzGoToNextFile(f) != UNZ_OK) {
+				unzClose(f);
+				printf("\nFailed to find next file, error: %s\n", strerror(errno));
+				while (getchar() != '\n') {}
+				retCode = 8; goto _end_;
+			}
+		}
+	}
+	SendMessage(hProgress, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
+	SendMessage(hProgress, PBM_SETPOS, 100, 0);
+_end_:
+	unzClose(f);
+	return retCode;
+}
 int WorkerThread(void*){
+	char *ver = 0;
+	char mapn[512];
+	char path[512];
+	char mapdl[512];
+	int retCode = 0;
+	int i = 0;
+	int len = 0;
+#ifndef MAKE_DLL
 	if(actAsUpdater){
 		while(IsProcessActive("Crysis.exe")){
-			SetWindowTextA(hInfo,"Waiting for game to close...");
+			SetWindowText(hInfo,"Waiting for game to close...");
 			Sleep(1000);
 		}
-		SetWindowTextA(hInfo,"Updating a client...");
+		SetWindowText(hInfo,"Updating a client...");
 	}
 	int argc=__argc;
 	char **argv=__argv;
@@ -356,15 +426,10 @@ int WorkerThread(void*){
 		PostQuitMessage(19);
 		return 19;
 	}
-	char *ver=0;
-	char mapn[512];
-	char path[512];
-	char mapdl[512];
-	int retCode = 0;
-	int i=0;
-	int len=(int)strlen(argv[1]);
+	len=(int)strlen(argv[1]);
 	strncpy_s(mapn,argv[1],512);
 	strncpy_s(mapdl,argv[2],512);
+
 	for(int i=0,j=strlen(mapn);i<j;i++){
 		if(mapn[i]=='|'){
 			mapn[i]=0;
@@ -379,6 +444,17 @@ int WorkerThread(void*){
 			strncat_s(path,argv[i],512);
 		}
 	}
+#else
+	strncpy_s(mapn, g_mapName, 512);
+	strncpy_s(mapdl, g_mapPath, 512);
+	strncpy_s(path, g_cwd, 512);
+	for (int i = 0, j = strlen(mapn); i<j; i++) {
+		if (mapn[i] == '|') {
+			mapn[i] = 0;
+			ver = mapn + i + 1;
+		}
+	}
+#endif
 	char mpath[512];
 	srand((unsigned int)time(0));
 	char fname[255];
@@ -502,7 +578,9 @@ _end_:
 			}
 		}
 	}
+#ifndef MAKE_DLL
 	PostQuitMessage(retCode);
 	SendMessage(gHwnd,WM_DESTROY,0,0);
+#endif
 	return retCode;
 }

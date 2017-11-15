@@ -10,6 +10,7 @@
 #include <Windows.h>
 #include "Mutex.h"
 #include "NetworkStuff.h"
+#include "Atomic.h"
 
 #pragma region CPPAPIDefinitions
 class CPPAPI : public CScriptableBase {
@@ -182,20 +183,32 @@ struct DownloadMapStruct : public AsyncData {
 	}
 	virtual void onUpdate() {
 		time_t tn = time(0);
+		extern PFNDOWNLOADMAP pfnDownloadMap;
 		if ((tn - t)>1) {
-			DWORD pid = GetProcessId(hProcess);
-			HWND hWnd = 0;
-			if (pid && (hWnd = GetHwnd(pid))) {
-				char *buffer = new char[256];
-				if (buffer) {
-					memset(buffer, 0, 256);
-					int n = GetWindowTextA(hWnd, buffer, 256);
-					ToggleLoading(n?buffer:"Starting map download", true, !ann);
-					delete[] buffer;
+			if (!pfnDownloadMap) {
+				DWORD pid = GetProcessId(hProcess);
+				HWND hWnd = 0;
+				if (pid && (hWnd = GetHwnd(pid))) {
+					char *buffer = new char[256];
+					if (buffer) {
+						memset(buffer, 0, 256);
+						int n = GetWindowTextA(hWnd, buffer, 256);
+						ToggleLoading(n ? buffer : "Starting map download", true, !ann);
+						delete[] buffer;
+					}
+					else ToggleLoading("Downloading map", true, !ann);
 				}
-				else ToggleLoading("Downloading map", true, !ann);
-			} else ToggleLoading("Downloading map", true);
-			ann = true;
+				else ToggleLoading("Downloading map", true);
+				ann = true;
+			} else {
+				const char *msg = 0;
+				extern Atomic<const char*> mapDlMessage;
+				mapDlMessage.get(msg);
+				if (msg) {
+					ToggleLoading(msg, true, !ann);
+				} else ToggleLoading("Downloading map", true);
+				ann = true;
+			}
 			t = tn;
 		}
 	}

@@ -28,6 +28,7 @@
 #include "CPPAPI.h"
 #include "Socket.h"
 #include "Structs.h"
+#include "Atomic.h"
 CPPAPI *luaApi=0;
 Socket *socketApi=0;
 ISystem *pSystem=0;
@@ -38,6 +39,7 @@ IScriptSystem *pScriptSystem=0;
 IGameFramework *pGameFramework=0;
 IFlashPlayer *pFlashPlayer=0;
 AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
+Atomic<const char*> mapDlMessage(0);
 std::map<std::string, std::string> asyncRetVal;
 int asyncQueueIdx = 0;
 
@@ -69,6 +71,10 @@ PFNGM pGetMenu = 0;
 PFNGMS pGetMenuScreen = 0;
 PFNMIL pMenuIsLoaded = 0;
 PFNGU pGameUpdate = 0;
+PFNSETUPDATEPROGRESSCALLBACK pfnSetUpdateProgressCallback = 0;
+PFNDOWNLOADMAP pfnDownloadMap = 0;
+
+HMODULE hMapDlLib = 0;
 
 void *m_ui;
 char SvMaster[255]="m.crymp.net";
@@ -76,6 +82,11 @@ char SvMaster[255]="m.crymp.net";
 bool TestGameFilesWritable();
 
 void OnUpdate(float frameTime);
+
+void __stdcall MapDownloadUpdateProgress(const char *msg, bool error) {
+	mapDlMessage.set(msg);
+}
+
 void CommandClMaster(IConsoleCmdArgs *pArgs){
 	if (pArgs->GetArgCount()>1)
 	{
@@ -455,7 +466,17 @@ extern "C" {
 #else
 		HMODULE lib=LoadLibraryA(".\\.\\.\\Bin32\\CryGame.dll");
 #endif
+		hMapDlLib = LoadLibraryA(".\\.\\.\\Mods\\sfwcl\\Bin32\\MapDownloader.dll");
 		PFNCREATEGAME createGame=(PFNCREATEGAME)GetProcAddress(lib,"CreateGame");
+		if (hMapDlLib) {
+			pfnSetUpdateProgressCallback = (PFNSETUPDATEPROGRESSCALLBACK)GetProcAddress(hMapDlLib, "SetUpdateProgressCallback");
+			pfnDownloadMap = (PFNDOWNLOADMAP)GetProcAddress(hMapDlLib, "DownloadMap");
+			pfnSetUpdateProgressCallback((void*)MapDownloadUpdateProgress);
+		} else {
+			char msg[100];
+			sprintf(msg, "FAILED TO LOAD MAPDL: %d", GetLastError());
+			MessageBoxA(0, msg, 0, 0);
+		}
 		pGame=(IGame*)createGame(ptr);
 		GAME_VER=version;
 		patchMem(version);
