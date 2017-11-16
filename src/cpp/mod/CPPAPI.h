@@ -213,6 +213,11 @@ struct DownloadMapStruct : public AsyncData {
 		}
 	}
 	virtual void postExec() {
+		extern IGameFramework *pGameFramework;
+		ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
+		if (pLevelSystem) {
+			pLevelSystem->Rescan();
+		}
 		ToggleLoading("Downloading map", false);
 	}
 	virtual void exec() {

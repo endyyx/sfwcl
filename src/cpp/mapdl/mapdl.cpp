@@ -119,8 +119,8 @@ public:
 					dnSpeed/=1024.0f;
 				}
 
-				SendMessageA(hProgress, PBM_SETRANGE, 0, MAKELPARAM(0, progMax));
-				SendMessageA(hProgress, PBM_SETPOS, prog, 0);
+				SendMessage(hProgress, PBM_SETRANGE, 0, MAKELPARAM(0, progMax));
+				SendMessage(hProgress, PBM_SETPOS, prog, 0);
 				sprintf(progstr,"Downloading map %3.2f %% (%6.2f %ciB/s, %02d:%02d)",per,dnSpeed,unit,estimated/60,estimated%60);
 				SetWindowText(gHwnd,progstr);
 				SetWindowText(hInfo,progstr);
@@ -288,9 +288,11 @@ extern "C" {
 #endif
 int doUnzip(char *fpath, char *path) {
 
-	SendMessageA(hProgress, PBM_SETRANGE, 20, MAKELPARAM(0, 100));
-	SendMessageA(hProgress, PBM_SETSTEP, 1, 0);
-	SendMessageA(hProgress, PBM_STEPIT, 0, 0);
+	char originalDirectory[MAX_PATH];
+
+	SendMessage(hProgress, PBM_SETRANGE, 20, MAKELPARAM(0, 100));
+	SendMessage(hProgress, PBM_SETSTEP, 1, 0);
+	SendMessage(hProgress, PBM_STEPIT, 0, 0);
 
 	int retCode = 0;
 	unzFile f = unzOpen(fpath);
@@ -298,12 +300,14 @@ int doUnzip(char *fpath, char *path) {
 	if (unzGetGlobalInfo(f, &global_info) != UNZ_OK) {
 		unzClose(f);
 		printf("\nFailed to get ZIP file info, error: %s\n", strerror(errno));
-		while (getchar() != '\n') {}
+		//while (getchar() != '\n') {}
 		retCode = 4; goto _end_;
 	}
 	char read_buffer[16384];
 	uLong i;
 	SetWindowText(gHwnd, "Decompressing archive...");
+	FILE *out = 0;
+	GetCurrentDirectory(MAX_PATH, originalDirectory);
 	for (i = 0; i < global_info.number_entry; ++i)
 	{
 		unz_file_info file_info;
@@ -311,7 +315,7 @@ int doUnzip(char *fpath, char *path) {
 		if (unzGetCurrentFileInfo(f, &file_info, filename, 255, NULL, 0, NULL, 0) != UNZ_OK) {
 			unzClose(f);
 			printf("\nFailed to get ZIP file info, error: %s\n", strerror(errno));
-			while (getchar() != '\n') {}
+			//while (getchar() != '\n') {}
 			retCode = 4; goto _end_;
 		}
 		char tmpfname[255];
@@ -339,15 +343,15 @@ int doUnzip(char *fpath, char *path) {
 				if (unzOpenCurrentFile(f) != UNZ_OK) {
 					unzClose(f);
 					printf("\nFailed to open the file, error: %s\n", strerror(errno));
-					while (getchar() != '\n') {}
+					//while (getchar() != '\n') {}
 					retCode = 5; goto _end_;
 				}
-				FILE *out = fopen((mklink(path, filename)), "wb");
+				out = fopen((mklink(path, filename)), "wb");
 				if (!out) {
 					unzCloseCurrentFile(f);
 					unzClose(f);
 					printf("\nFailed to output the file, error: %s\n", strerror(errno));
-					while (getchar() != '\n') {}
+					//while (getchar() != '\n') {}
 					retCode = 6; goto _end_;
 				}
 				int error = UNZ_OK;
@@ -359,8 +363,8 @@ int doUnzip(char *fpath, char *path) {
 					stepsz = (int)((float)stepsz / dividor);
 				}
 
-				SendMessageA(hProgress, PBM_SETRANGE, 0, MAKELPARAM(0, fsz));
-				SendMessageA(hProgress, PBM_SETSTEP, stepsz, 0);
+				SendMessage(hProgress, PBM_SETRANGE, 0, MAKELPARAM(0, fsz));
+				SendMessage(hProgress, PBM_SETSTEP, stepsz, 0);
 
 				char infoMsg[255];
 				float state = 0;
@@ -372,12 +376,12 @@ int doUnzip(char *fpath, char *path) {
 						unzCloseCurrentFile(f);
 						unzClose(f);
 						printf("\nFailed to read the file, error: %s\n", strerror(errno));
-						while (getchar() != '\n') {}
+						//while (getchar() != '\n') {}
 						retCode = 7; goto _end_;
 					}
 					if (error>0)
 						fwrite(read_buffer, error, 1, out);
-					SendMessageA(hProgress, PBM_STEPIT, 0, 0);
+					SendMessage(hProgress, PBM_STEPIT, 0, 0);
 					state += 16384;
 					if (state>file_info.uncompressed_size)
 						state = (float)file_info.uncompressed_size;
@@ -386,6 +390,7 @@ int doUnzip(char *fpath, char *path) {
 					SetWindowText(hInfo, infoMsg);
 				} while (error>0);
 				fclose(out);
+				out = 0;
 			}
 		}
 		unzCloseCurrentFile(f);
@@ -393,7 +398,7 @@ int doUnzip(char *fpath, char *path) {
 			if (unzGoToNextFile(f) != UNZ_OK) {
 				unzClose(f);
 				printf("\nFailed to find next file, error: %s\n", strerror(errno));
-				while (getchar() != '\n') {}
+				//while (getchar() != '\n') {}
 				retCode = 8; goto _end_;
 			}
 		}
@@ -401,7 +406,11 @@ int doUnzip(char *fpath, char *path) {
 	SendMessage(hProgress, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
 	SendMessage(hProgress, PBM_SETPOS, 100, 0);
 _end_:
+	if (out) {
+		fclose(out);
+	}
 	unzClose(f);
+	SetCurrentDirectory(originalDirectory);
 	return retCode;
 }
 int WorkerThread(void*){
@@ -448,7 +457,7 @@ int WorkerThread(void*){
 	strncpy_s(mapn, g_mapName, 512);
 	strncpy_s(mapdl, g_mapPath, 512);
 	strncpy_s(path, g_cwd, 512);
-	for (int i = 0, j = strlen(mapn); i<j; i++) {
+	for (size_t i = 0, j = strlen(mapn); i<j; i++) {
 		if (mapn[i] == '|') {
 			mapn[i] = 0;
 			ver = mapn + i + 1;
@@ -463,7 +472,7 @@ int WorkerThread(void*){
 	strcpy(fname,"_mapdl.tmp");
 	//sprintf_s(fname,"%s.pak",fname);
 	printf("TmpFile: %s\n",fname);
-	for(int i=0,j=strlen(mapn);i<j;i++)
+	for(size_t i=0,j=strlen(mapn);i<j;i++)
 		mapn[i]=mapn[i]=='/'?'\\':mapn[i];
 	sprintf_s(mpath,"%s\\..\\Game\\Levels\\%s",path,mapn);
 	char fpath[512];
@@ -528,9 +537,9 @@ _end_:
 			char cwd[5120];
 			GetModuleFileNameA(0,cwd,5120);
 			int last=-1;
-			for(int i=0,j=strlen(cwd);i<j;i++){
+			for(size_t i=0,j=strlen(cwd);i<j;i++){
 				if(cwd[i]=='\\')
-					last=i;
+					last=(int)i;
 			}
 			if(last>=0)
 				cwd[last]=0;

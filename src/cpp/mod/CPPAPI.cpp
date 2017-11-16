@@ -154,10 +154,11 @@ int CPPAPI::MapAvailable(IFunctionHandler *pH,const char *_path){
 		mpath[i]=mpath[i]=='/'?'\\':mpath[i];
 	ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
 	if(pLevelSystem){
+		pLevelSystem->Rescan();
 		for(int l = 0; l < pLevelSystem->GetLevelCount(); ++l){
 			ILevelInfo *pLevelInfo = pLevelSystem->GetLevelInfo(l);
 			if(pLevelInfo){
-				if(stricmp(pLevelInfo->GetName(),path)==0){
+				if(_stricmp(pLevelInfo->GetName(),path)==0){
 					bool exists=true;
 					if(ver){
 						char cwd[5120];
@@ -355,12 +356,13 @@ bool DownloadMapFromObject(DownloadMapStruct *now) {
 			}
 		}
 	}
-	ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
-	if (pLevelSystem) {
-		pLevelSystem->Rescan();
-	}
-	if(!now->isAsync)
+	if (!now->isAsync) {
+		ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
+		if (pLevelSystem) {
+			pLevelSystem->Rescan();
+		}
 		ShowWindow(hwnd, SW_MAXIMIZE);
+	}
 	return ret;
 }
 void AsyncConnect(int id, AsyncData *obj) {
