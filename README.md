@@ -59,13 +59,15 @@ Crysis/
 ├── ...
 ├── Mods/
 │   └── sfwcl/
-│       ├── Bin32/
-│       │   └── sfwcl.dll (32-bit version)
-│       ├── Bin64/
-│       │   └── sfwcl.dll (64-bit version)
+│       ├── Bin32/ (32-bit binaries)
+│       │   ├── sfwcl.dll
+│       │   └── mapdl.dll
+│       ├── Bin64/ (64-bit binaries)
+│       │   ├── sfwcl.dll
+│       │   └── mapdl.dll
 │       └── Game/
 │           └── sfwcl.pak
-└── SfwClFiles/
+└── SfwClFiles/ (use either 32-bit or 64-bit binaries here)
     ├── MapDownloader.exe
     ├── SafeWritingClient.exe (used for joining server from web page)
     └── sfwcl_precheck.exe
