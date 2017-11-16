@@ -463,10 +463,10 @@ extern "C" {
 		int version=getGameVer(".\\.\\.\\Bin32\\CryGame.dll");
 #ifdef IS64
 		HMODULE lib=LoadLibraryA(".\\.\\.\\Bin64\\CryGame.dll");
-		hMapDlLib = LoadLibraryA(".\\.\\.\\Mods\\sfwcl\\Bin64\\MapDownloader.dll");
+		hMapDlLib = LoadLibraryA(".\\.\\.\\Mods\\sfwcl\\Bin64\\mapdl.dll");
 #else
 		HMODULE lib=LoadLibraryA(".\\.\\.\\Bin32\\CryGame.dll");
-		hMapDlLib = LoadLibraryA(".\\.\\.\\Mods\\sfwcl\\Bin32\\MapDownloader.dll");
+		hMapDlLib = LoadLibraryA(".\\.\\.\\Mods\\sfwcl\\Bin32\\mapdl.dll");
 #endif
 		PFNCREATEGAME createGame=(PFNCREATEGAME)GetProcAddress(lib,"CreateGame");
 		if (hMapDlLib) {
