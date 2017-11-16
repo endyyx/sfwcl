@@ -8,8 +8,6 @@ This software is licenced under GPLv3 licence. So if you ever decide to make som
 
 TODOs:
  - fully working 64 bit version
- - asynchronous network communication for verifying servers, logging in, so UX is more fluid
- - ingame map downloader without admin permissions
 
 Other useful tools:
  - Wireshark
@@ -23,7 +21,7 @@ Other useful tools:
 - Install 7-zip (optional, used for creating .pak file)
 - Download source code from this GitHub repository and unpack it somewhere
 - Create empty build directory
-- Create another one if you want to build 64-bit version too (only 64-bit DLL is needed)
+- Create another one if you want to build 64-bit version too (only 64-bit DLLs are needed)
 
 #### Building (choose the way):
 - Using Visual Studio:
