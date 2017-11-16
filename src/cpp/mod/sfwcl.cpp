@@ -473,10 +473,6 @@ extern "C" {
 			pfnSetUpdateProgressCallback = (PFNSETUPDATEPROGRESSCALLBACK)GetProcAddress(hMapDlLib, "SetUpdateProgressCallback");
 			pfnDownloadMap = (PFNDOWNLOADMAP)GetProcAddress(hMapDlLib, "DownloadMap");
 			pfnSetUpdateProgressCallback((void*)MapDownloadUpdateProgress);
-		} else {
-			char msg[100];
-			sprintf(msg, "FAILED TO LOAD MAPDL: %d", GetLastError());
-			MessageBoxA(0, msg, 0, 0);
 		}
 		pGame=(IGame*)createGame(ptr);
 		GAME_VER=version;
