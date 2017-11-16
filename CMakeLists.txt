@@ -59,7 +59,7 @@ if(CMAKE_HOST_WIN32)
 	endif()
 endif()
 
-option(SFWCL_PRECHECK "Build sfwcl_precheck.exe" ON)
+option(SFWCL_PRECHECK "Build sfwcl_precheck.exe" OFF)
 if(SFWCL_PRECHECK)
 	add_executable(sfwcl_precheck src/cpp/precheck/main.cpp)
 	# VS2010 and higher
@@ -75,9 +75,10 @@ if(SFWCL_LAUNCHER)
 	add_executable(SafeWritingClient src/cpp/launcher/launcher.cpp)
 endif()
 
-option(SFWCL_MAPDL "Build MapDownloader.exe" OFF)
-if(SFWCL_MAPDL)
-	add_executable(MapDownloader src/cpp/mapdl/mapdl.cpp)
+option(SFWCL_MAPDL_DLL "Build MapDownloader.dll" ON)
+option(SFWCL_MAPDL_EXE "Build MapDownloader.exe" OFF)
+
+if(SFWCL_MAPDL_DLL OR SFWCL_MAPDL_EXE)
 	# hide not needed options of zlib
 	mark_as_advanced(FORCE ASM686 AMD64 CMAKE_BACKWARDS_COMPATIBILITY EXECUTABLE_OUTPUT_PATH LIBRARY_OUTPUT_PATH)
 	mark_as_advanced(FORCE INSTALL_BIN_DIR INSTALL_LIB_DIR INSTALL_INC_DIR INSTALL_MAN_DIR INSTALL_PKGCONFIG_DIR)
@@ -93,6 +94,23 @@ if(SFWCL_MAPDL)
 		${CMAKE_CURRENT_BINARY_DIR}/lib/zlib
 	)
 	target_link_libraries(miniunz zlibstatic)
-	target_link_libraries(MapDownloader miniunz)
-	set_target_properties(MapDownloader PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS")
+endif()
+
+if(SFWCL_MAPDL_DLL)
+	add_library(mapdl_dll MODULE src/cpp/mapdl/mapdl.cpp)
+	target_compile_definitions(mapdl_dll PUBLIC -DMAKE_DLL)
+	target_link_libraries(mapdl_dll miniunz)
+	set_target_properties(mapdl_dll PROPERTIES OUTPUT_NAME "MapDownloader")
+endif()
+
+if(SFWCL_MAPDL_EXE)
+	add_executable(mapdl_exe src/cpp/mapdl/mapdl.cpp)
+	target_link_libraries(mapdl_exe miniunz)
+	set_target_properties(mapdl_exe PROPERTIES OUTPUT_NAME "MapDownloader")
+	# VS2010 and higher
+	if(MSVC_IDE AND (MSVC_VERSION GREATER_EQUAL 1600))
+		set_target_properties(mapdl_exe PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /level='requireAdministrator' /uiAccess='false'")
+	else()
+		set_target_properties(mapdl_exe PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\"")
+	endif()
 endif()

@@ -1,7 +1,13 @@
 #ifdef _USRDLL 
 #define MAKE_DLL
 #endif
+
+#ifndef _CRT_SECURE_NO_WARNINGS
+// CMake is not used
 #define _CRT_SECURE_NO_WARNINGS
+#pragma comment(lib,"miniunz")
+#pragma comment(lib,"zlibstatic")
+#endif
 
 #include <Windows.h>
 #include <stdio.h>
@@ -15,9 +21,6 @@
 #include <commctrl.h>
 #include <map>
 #include "unzip.h"
-
-#pragma comment(lib,"miniunz")
-#pragma comment(lib,"zlibstatic")
 
 #ifdef MAKE_DLL
 #undef SendMessage
