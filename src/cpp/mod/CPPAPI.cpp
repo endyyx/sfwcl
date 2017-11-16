@@ -1,18 +1,17 @@
 #include "CPPAPI.h"
-#ifdef USE_SDK
 #include <IEntity.h>
 #include <IEntitySystem.h>
 #include <IVehicleSystem.h>
 #include <IGameObjectSystem.h>
 #include <CryThread.h>
-#include <IScriptSystem.h>
 #include "AtomicCounter.h"
+#include "Atomic.h"
 //#include <mutex>
 //#include <functional>
 
 #pragma region CPPAPI
 
-extern AsyncData *asyncQueue[MAX_ASYNC_QUEUE];
+extern AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
 extern int asyncQueueIdx;
 extern std::map<std::string, std::string> asyncRetVal;
 extern IScriptSystem *pScriptSystem;
@@ -63,15 +62,9 @@ int CPPAPI::ToggleLoading(IFunctionHandler *pH, const char *text, bool loading, 
 	return pH->EndFunction(true);
 }
 int CPPAPI::FSetCVar(IFunctionHandler* pH,const char * cvar,const char *val){
-#ifdef IS6156DLL
-	if(gEnv->pConsole->GetCVar(cvar)!=NULL)
-		gEnv->pConsole->GetCVar(cvar)->ForceSet(val);
-	return pH->EndFunction(true);
-#else
 	if(ICVar *cVar=pConsole->GetCVar(cvar))
 		cVar->ForceSet(val);
 	return pH->EndFunction(true);
-#endif
 }
 int CPPAPI::Random(IFunctionHandler* pH){
 	static bool set=false;
@@ -110,11 +103,7 @@ int CPPAPI::GetLocalIP(IFunctionHandler* pH){
 	return pH->EndFunction();
 }
 int CPPAPI::GetMapName(IFunctionHandler *pH){
-#ifdef IS6156DLL
-	return pH->EndFunction(gEnv->pGame->GetIGameFramework()->GetLevelName());
-#else
 	return pH->EndFunction(pGameFramework->GetLevelName());
-#endif
 }
 int CPPAPI::DoAsyncChecks(IFunctionHandler *pH) {
 #ifdef DO_ASYNC_CHECKS
@@ -165,10 +154,11 @@ int CPPAPI::MapAvailable(IFunctionHandler *pH,const char *_path){
 		mpath[i]=mpath[i]=='/'?'\\':mpath[i];
 	ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
 	if(pLevelSystem){
+		pLevelSystem->Rescan();
 		for(int l = 0; l < pLevelSystem->GetLevelCount(); ++l){
 			ILevelInfo *pLevelInfo = pLevelSystem->GetLevelInfo(l);
 			if(pLevelInfo){
-				if(stricmp(pLevelInfo->GetName(),path)==0){
+				if(_stricmp(pLevelInfo->GetName(),path)==0){
 					bool exists=true;
 					if(ver){
 						char cwd[5120];
@@ -297,6 +287,18 @@ int CPPAPI::MsgBox(IFunctionHandler* pH,const char *text,const char *title,int b
 #pragma endregion
 
 #pragma region AsyncStuff
+#ifdef OLD_MSVC_DETECTED
+BOOL WINAPI DownloadMapStructEnumProc(HWND hwnd, LPARAM lParam) {
+	DownloadMapStruct::Info *pParams = (DownloadMapStruct::Info*)(lParam);
+	DWORD processId;
+	if (GetWindowThreadProcessId(hwnd, &processId) && processId == pParams->pid) {
+		SetLastError(-1);
+		pParams->hWnd = hwnd;
+		return FALSE;
+	}
+	return TRUE;
+}
+#endif
 bool DownloadMapFromObject(DownloadMapStruct *now) {
 	IRenderer *pRend = pSystem->GetIRenderer();
 	const char *mapn = now->mapn;
@@ -314,41 +316,53 @@ bool DownloadMapFromObject(DownloadMapStruct *now) {
 		cwd[last] = 0;
 	char params[5120];
 	sprintf(cwd, "%s\\..\\SfwClFiles\\", cwd);
-	sprintf_s(params, "\"%s\" \"%s\" \"%s\"", mapn, mapdl, cwd);
-	SHELLEXECUTEINFOA info;
-	ZeroMemory(&info, sizeof(SHELLEXECUTEINFOA));
-	info.lpDirectory = cwd;
-	info.lpParameters = params;
-	info.lpFile = "MapDownloader.exe";
-	if(now->isAsync)
-		info.nShow = SW_SHOW;
-	else info.nShow = SW_HIDE;
-	info.cbSize = sizeof(SHELLEXECUTEINFOA);
-	info.fMask = SEE_MASK_NOCLOSEPROCESS;
-	info.hwnd = 0;
-	//MessageBoxA(0,cwd,0,0);
-	if (!ShellExecuteExA(&info)) {
-		printf("\nFailed to start map downloader, error code %d\n", GetLastError());
-		while (getchar() != '\n') {}
-		return false;
-	}
-	now->hProcess = info.hProcess;
-	
-	WaitForSingleObject(info.hProcess, INFINITE);
-	DWORD exitCode;
+	extern PFNDOWNLOADMAP pfnDownloadMap;
 	bool ret = true;
-	if (GetExitCodeProcess(info.hProcess, &exitCode)) {
-		if (exitCode != 0) {
-			printf("\nFailed to download map, error code: %d\n", (int)exitCode);
-			ret = false;
+	if (pfnDownloadMap) {
+		extern Atomic<const char*> mapDlMessage;
+		mapDlMessage.set(0);
+		int code = pfnDownloadMap(mapn, mapdl, cwd);
+		if (code) ret = false;
+	} else {
+		sprintf_s(params, "\"%s\" \"%s\" \"%s\"", mapn, mapdl, cwd);
+		SHELLEXECUTEINFOA info;
+		ZeroMemory(&info, sizeof(SHELLEXECUTEINFOA));
+		info.lpDirectory = cwd;
+		info.lpParameters = params;
+		extern bool g_gameFilesWritable;
+		///TODO: if g_gameFilesWritable -> MapDownloader.exe; else -> MapDownloaderUAC.exe
+		info.lpFile = "MapDownloader.exe";
+		if (now->isAsync)
+			info.nShow = SW_HIDE;
+		else info.nShow = SW_SHOW;
+		info.cbSize = sizeof(SHELLEXECUTEINFOA);
+		info.fMask = SEE_MASK_NOCLOSEPROCESS;
+		info.hwnd = 0;
+		//MessageBoxA(0,cwd,0,0);
+		if (!ShellExecuteExA(&info)) {
+			printf("\nFailed to start map downloader, error code %d\n", GetLastError());
+			while (getchar() != '\n') {}
+			return false;
+		}
+		now->hProcess = info.hProcess;
+
+		WaitForSingleObject(info.hProcess, INFINITE);
+		DWORD exitCode;
+		ret = true;
+		if (GetExitCodeProcess(info.hProcess, &exitCode)) {
+			if (exitCode != 0) {
+				printf("\nFailed to download map, error code: %d\n", (int)exitCode);
+				ret = false;
+			}
 		}
 	}
-	ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
-	if (pLevelSystem) {
-		pLevelSystem->Rescan();
-	}
-	if(!now->isAsync)
+	if (!now->isAsync) {
+		ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
+		if (pLevelSystem) {
+			pLevelSystem->Rescan();
+		}
 		ShowWindow(hwnd, SW_MAXIMIZE);
+	}
 	return ret;
 }
 void AsyncConnect(int id, AsyncData *obj) {
@@ -410,4 +424,3 @@ void GetClosestFreeItem(AsyncData **in,int *out){
 	*out = idx.increment();
 }
 #pragma endregion
-#endif

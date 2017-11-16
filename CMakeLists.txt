@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.7)
 
 if(NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Type of build")
@@ -10,19 +10,24 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithD
 set(CMAKE_USER_MAKE_RULES_OVERRIDE ${CMAKE_CURRENT_SOURCE_DIR}/cmake/msvc_c_flags_override.cmake)
 set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX ${CMAKE_CURRENT_SOURCE_DIR}/cmake/msvc_cxx_flags_override.cmake)
 
-project(sfwcl)
-
 # install target is not used here
 set(CMAKE_INSTALL_PREFIX "${PROJECT_BINARY_DIR}" CACHE INTERNAL "")
 
+project(sfwcl)
+
+if(NOT MSVC)
+	message(FATAL_ERROR "MSVC is the only supported compiler")
+endif()
+
+add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+
 option(SFWCL_DLL "Build sfwcl.dll" ON)
 if(SFWCL_DLL)
-	if(MSVC)
-		# Crysis SDK headers
-		include_directories(src/cpp/mod/CryEngine)
-	endif()
 	file(GLOB SFWCL_DLL_SOURCES src/cpp/mod/*.cpp)
 	add_library(sfwcl MODULE ${SFWCL_DLL_SOURCES})
+	# Crysis SDK headers
+	target_include_directories(sfwcl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp/mod/CryEngine)
+	target_compile_definitions(sfwcl PUBLIC -D_SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS)
 endif()
 
 # only Windows version of 7-zip creates valid .pak files
@@ -31,6 +36,10 @@ if(CMAKE_HOST_WIN32)
 	if(SFWCL_PAK)
 		set(SFWCL_PAK_FILE "${CMAKE_CURRENT_BINARY_DIR}/sfwcl.pak")
 		set(SFWCL_PAK_CONTENT "${CMAKE_CURRENT_SOURCE_DIR}/src/lua/Scripts")
+		option(SFWCL_PAK_CRYMP_LOGO "Add CryMP logo (GameSpy logo replacement) to sfwcl.pak" ON)
+		if(SFWCL_PAK_CRYMP_LOGO)
+			list(APPEND SFWCL_PAK_CONTENT "${CMAKE_CURRENT_SOURCE_DIR}/lib/crymp_logo/Libs")
+		endif()
 		find_program(7Z_EXE 7z PATHS "$ENV{ProgramFiles}/7-Zip" "$ENV{ProgramFiles\(x86\)}/7-Zip" DOC "Path to 7z executable")
 		if(NOT 7Z_EXE)
 			message(FATAL_ERROR "7-zip executable not found")
@@ -50,16 +59,29 @@ if(CMAKE_HOST_WIN32)
 	endif()
 endif()
 
+option(SFWCL_PRECHECK "Build sfwcl_precheck.exe" OFF)
+if(SFWCL_PRECHECK)
+	add_executable(sfwcl_precheck src/cpp/precheck/main.cpp)
+	# VS2010 and higher
+	if(MSVC_IDE AND (MSVC_VERSION GREATER_EQUAL 1600))
+		set_target_properties(sfwcl_precheck PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /level='requireAdministrator' /uiAccess='false'")
+	else()
+		set_target_properties(sfwcl_precheck PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\"")
+	endif()
+endif()
+
 option(SFWCL_LAUNCHER "Build SafeWritingClient.exe" OFF)
 if(SFWCL_LAUNCHER)
 	add_executable(SafeWritingClient src/cpp/launcher/launcher.cpp)
 endif()
 
-option(SFWCL_MAPDL "Build MapDownloader.exe" OFF)
-if(SFWCL_MAPDL)
-	add_executable(MapDownloader src/cpp/mapdl/mapdl.cpp)
+option(SFWCL_MAPDL_DLL "Build mapdl.dll" ON)
+option(SFWCL_MAPDL_EXE "Build MapDownloader.exe" OFF)
+
+if(SFWCL_MAPDL_DLL OR SFWCL_MAPDL_EXE)
 	# hide not needed options of zlib
-	mark_as_advanced(FORCE ASM686 AMD64 INSTALL_BIN_DIR INSTALL_LIB_DIR INSTALL_INC_DIR INSTALL_MAN_DIR INSTALL_PKGCONFIG_DIR)
+	mark_as_advanced(FORCE ASM686 AMD64 CMAKE_BACKWARDS_COMPATIBILITY EXECUTABLE_OUTPUT_PATH LIBRARY_OUTPUT_PATH)
+	mark_as_advanced(FORCE INSTALL_BIN_DIR INSTALL_LIB_DIR INSTALL_INC_DIR INSTALL_MAN_DIR INSTALL_PKGCONFIG_DIR)
 	add_subdirectory(lib/zlib EXCLUDE_FROM_ALL)
 	add_library(miniunz STATIC
 		lib/zlib/contrib/minizip/unzip.c
@@ -72,26 +94,21 @@ if(SFWCL_MAPDL)
 		${CMAKE_CURRENT_BINARY_DIR}/lib/zlib
 	)
 	target_link_libraries(miniunz zlibstatic)
-	target_link_libraries(MapDownloader miniunz)
 endif()
 
-if(MSVC)
-	message(STATUS "Using MSVC compiler options")
-	add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-	add_definitions(-D_SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS)
-	if(SFWCL_MAPDL)
-		set_target_properties(MapDownloader PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS")
-	endif()
-else()
-	message(STATUS "Using GNU compiler options")
-	set(SFWCL_MINGW_STATIC_FLAGS "-static-libstdc++ -static-libgcc")
-	option(SFWCL_MINGW_STATIC "Link with ${SFWCL_MINGW_STATIC_FLAGS}" ON)
-	if(SFWCL_MINGW_STATIC)
-		list(APPEND CMAKE_EXE_LINKER_FLAGS ${SFWCL_MINGW_STATIC_FLAGS})
-		list(APPEND CMAKE_SHARED_LINKER_FLAGS ${SFWCL_MINGW_STATIC_FLAGS})
-		list(APPEND CMAKE_MODULE_LINKER_FLAGS ${SFWCL_MINGW_STATIC_FLAGS})
-	endif()
-	if(SFWCL_MAPDL)
-		set_target_properties(MapDownloader PROPERTIES LINK_FLAGS "-mwindows")
+if(SFWCL_MAPDL_DLL)
+	add_library(mapdl MODULE src/cpp/mapdl/mapdl.cpp)
+	target_compile_definitions(mapdl PUBLIC -DMAKE_DLL)
+	target_link_libraries(mapdl miniunz)
+endif()
+
+if(SFWCL_MAPDL_EXE)
+	add_executable(MapDownloader src/cpp/mapdl/mapdl.cpp)
+	target_link_libraries(MapDownloader miniunz)
+	# VS2010 and higher
+	if(MSVC_IDE AND (MSVC_VERSION GREATER_EQUAL 1600))
+		set_target_properties(MapDownloader PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /level='requireAdministrator' /uiAccess='false'")
+	else()
+		set_target_properties(MapDownloader PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\"")
 	endif()
 endif()

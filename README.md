@@ -1,6 +1,6 @@
 # sfwcl
 
-This is source of sfwcl of crymp.net, please use Microsoft Visual C++ to compile, G++ is acceptable too, but due to little bit different ABI's not everything's gonna work as expected.
+This is source of sfwcl of crymp.net, please use Microsoft Visual C++ to compile.
 
 Unmodified version of zlib library from https://github.com/madler/zlib is used here.
 
@@ -25,7 +25,7 @@ Other useful tools:
 - Create empty build directory
 - Create another one if you want to build 64-bit version too (only 64-bit DLL is needed)
 
-#### Building (choose one way):
+#### Building (choose the way):
 - Using Visual Studio:
     - open CMake, select directory with source code, select build directory
     - `Configure`
@@ -49,9 +49,6 @@ Other useful tools:
     - run `nmake` in the command prompt
     - repeat all above steps for 64-bit version using x64 Windows SDK command prompt
 
-- Using MinGW-w64:
-    - *comming soon*
-
 #### Installing:
 - copy files to your Crysis directory like this:
 ~~~~
@@ -62,14 +59,17 @@ Crysis/
 ├── ...
 ├── Mods/
 │   └── sfwcl/
-│       ├── Bin32/
-│       │   └── sfwcl.dll (32-bit version)
-│       ├── Bin64/
-│       │   └── sfwcl.dll (64-bit version)
+│       ├── Bin32/ (32-bit binaries)
+│       │   ├── sfwcl.dll
+│       │   └── mapdl.dll
+│       ├── Bin64/ (64-bit binaries)
+│       │   ├── sfwcl.dll
+│       │   └── mapdl.dll
 │       └── Game/
 │           └── sfwcl.pak
-└── SfwClFiles/
+└── SfwClFiles/ (use either 32-bit or 64-bit binaries here)
     ├── MapDownloader.exe
-    └── SafeWritingClient.exe (used for joining server from web page)
+    ├── SafeWritingClient.exe (used for joining server from web page)
+    └── sfwcl_precheck.exe
 ~~~~
 - create `Crysis.exe` shortcut and add `-mod sfwcl` parameter

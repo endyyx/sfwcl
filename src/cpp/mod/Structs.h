@@ -1,8 +1,5 @@
-#ifndef STRUCTS_H
-#define STRUCTS_H
-#ifdef USE_SDK
-#include <CryModuleDefs.h>
-#include <CryMemoryManager_impl.h>
+#pragma once
+
 #include <memory>
 
 struct SServerInfo 
@@ -61,8 +58,3 @@ struct MultiplayerMenu{
 	void* m_chat;
 	std::auto_ptr<void*> m_ui;
 };
-#else
-struct MultiplayerMenu{};
-struct SServerInfo{};
-#endif
-#endif
