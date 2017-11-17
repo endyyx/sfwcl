@@ -396,6 +396,8 @@ bool AsyncDownloadMap(int id, AsyncData *obj) {
 }
 static void AsyncThread(){
 	extern Mutex g_mutex;
+	WSADATA data;
+	WSAStartup(0x202, &data);
 	while(true){
 		WaitForSingleObject(gEvent,INFINITE);
 		if(asyncQueue){
@@ -418,6 +420,7 @@ static void AsyncThread(){
 		}
 		ResetEvent(gEvent);
 	}
+	WSACleanup();
 }
 void GetClosestFreeItem(AsyncData **in,int *out){
 	static AtomicCounter idx(MAX_ASYNC_QUEUE);

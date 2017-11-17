@@ -80,8 +80,8 @@ void *m_ui;
 char SvMaster[255]="m.crymp.net";
 
 bool TestGameFilesWritable();
-
 void OnUpdate(float frameTime);
+void MemScan(void *base, int size);
 
 void __stdcall MapDownloadUpdateProgress(const char *msg, bool error) {
 	mapDlMessage.set(msg);
@@ -161,10 +161,18 @@ bool __fastcall GetSelectedServer(void *self, void *addr, SServerInfo& server) {
 		char sz_ip[30];
 		int ip = server.m_publicIP;
 		int port = server.m_publicPort;
+		//MemScan(&server, 1024);
 #ifdef IS64
 		if (GAME_VER == 6156) {
-			ip = getField(int, &server, 0x80);
-			port = (int)getField(unsigned short, &server, 0x84);
+			unsigned char b = getField(unsigned char, &server, 0x38);
+			int off1 = 0x80;
+			int off2 = 0x84;
+			if (b != 0xFE) {
+				off1 += 0x40;
+				off2 += 0x40;
+			}
+			ip = getField(int, &server, off1);
+			port = (int)getField(unsigned short, &server, off2);
 		}
 		else if (GAME_VER == 5767) {
 			ip = getField(int, &server, 0x30);
@@ -201,9 +209,7 @@ void __fastcall DisconnectError(void *self, void *addr, EDisconnectionCause dc, 
 		pScriptSystem->PushFuncParam(serverMsg);
 		pScriptSystem->EndCall();
 	}
-	//unhook(pDisconnectError);
 	pDisconnectError(self, addr, dc, connecting, serverMsg);
-	//hook((void*)pDisconnectError, (void*)DisconnectError);
 }
 int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
 	//unhook(pGameUpdate);
