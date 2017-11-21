@@ -56,6 +56,7 @@ void CPPAPI::RegisterMethods(){
 	SCRIPT_REG_TEMPLFUNC(DoAsyncChecks, "");
 	SCRIPT_REG_TEMPLFUNC(AsyncDownloadMap, "mapn, mapdl");
 	SCRIPT_REG_TEMPLFUNC(ToggleLoading, "text, loading, reset");
+	SCRIPT_REG_TEMPLFUNC(CancelDownload, "");
 }
 int CPPAPI::ToggleLoading(IFunctionHandler *pH, const char *text, bool loading, bool reset) {
 	::ToggleLoading(text, loading, reset);
@@ -204,6 +205,11 @@ int CPPAPI::DownloadMap(IFunctionHandler *pH,const char *mapn,const char *mapdl)
 		now->success = DownloadMapFromObject(now);
 		return pH->EndFunction(now->success);
 	}
+	return pH->EndFunction();
+}
+int CPPAPI::CancelDownload(IFunctionHandler *pH) {
+	extern PFNCANCELDOWNLOAD pfnCancelDownload;
+	if (pfnCancelDownload) pfnCancelDownload();
 	return pH->EndFunction();
 }
 int CPPAPI::AsyncConnectWebsite(IFunctionHandler* pH, char * host, char * page, int port, bool http11, int timeout, bool methodGet, bool alive) {

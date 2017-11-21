@@ -114,10 +114,12 @@ MASK_DYNFROZEN=8;
 MASTER_ADDR="crymp.net";
 
 UPDATED_SELF = false;
+joiningServer = false
+downloadingMap = false
 
 AsyncAwait={};
 
-function OnUpdate(frameTime)
+function OnUpdate(frameTime, inQueue, frame)
 	if CPPAPI then
 		local ret=CPPAPI.DoAsyncChecks();
 		if ret and type(ret)=="table" and #ret>0 then
@@ -142,8 +144,21 @@ function OnUpdate(frameTime)
 	end
 	return 1;
 end
+function HandleFSCommand(cmd, args)
+	--printf("HandleFSCommand(%s, %s)", cmd or "<unknown>", args or "<unknown>")
+	if cmd=="JoinServer" then
+		joiningServer = true;
+	else
+		if joiningServer then
+			if downloadingMap then
+				CPPAPI.CancelDownload()
+			end
+			joiningServer = false;
+		end
+	end
+end
 function AsyncCreateId(id,func)
-	printf("Created Async call: "..id)
+	--printf("Created Async call: "..id)
 	if id then
 		AsyncAwait[#AsyncAwait+1]={id,func};
 	else
@@ -152,21 +167,22 @@ function AsyncCreateId(id,func)
 end
 function AsyncCreate(callback,func,...)
 	local id=func(...);
-	printf("Created Async call: "..id)
+	--printf("Created Async call: "..id)
 	if id then
 		AsyncAwait[#AsyncAwait+1]={id,callback};
 	end
 end
 function AsyncConnectHTTP(host,url,method,port,http11,timeout,func)
-	printf("Connecting %s",host);
-	printf("URL: %s",(url:gsub("[%%]","#")) or "nil");
+	--printf("Connecting %s",host);
+	--printf("URL: %s",(url:gsub("[%%]","#")) or "nil");
 	method=method or "GET";
 	method=method:upper();
 	AsyncConnCtr=(AsyncConnCtr or 0)+1;
 	AsyncCreateId(CPPAPI.AsyncConnectWebsite(host,url,port or 80,http11 or false,timeout,method=="GET" and true or false,false),func);
 end
 function AsyncDownloadMap(a,b,func)
-	printf("Downloading %s [%s]", a, b);
+	--printf("Downloading %s [%s]", a, b);
+	downloadingMap = true;
 	AsyncCreateId(CPPAPI.AsyncDownloadMap(a,b),func);
 end
 function SmartHTTP(method,host,url,func)
@@ -560,6 +576,7 @@ function TryGetMap(sv, map, mapdl)
 		if ASYNC_MAPS then
 			System.ExecuteCommand("disconnect");
 			AsyncDownloadMap(sv.map, sv.mapdl, function(res)
+				downloadingMap = false
 				printf("Download finished");
 				if not res then
 					printf("$4Failed to download the map!");
@@ -906,6 +923,7 @@ function TryDownloadFromRepo(name, callback)
 					printf("$3Map download URL found, updating map...");
 					if ASYNC_MAPS then
 						AsyncDownloadMap(name, url, function(res)
+							downloadingMap = false
 							if callback then
 								callback(res)
 							end
@@ -932,6 +950,7 @@ end
 
 System.AddCCommand("say","saye(%line)","Bindable say to chat");
 System.AddCCommand("mapdl","TryDownloadFromRepo(%line)","Look up in repo for map download, example usage: mapdl multiplayer/ia/pure");
+System.AddCCommand("tltest","ToggleLoading(%line,true,true)","Test ToggleLoading")
 
 UpdateSelf()
 

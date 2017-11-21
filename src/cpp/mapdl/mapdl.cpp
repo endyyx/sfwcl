@@ -56,6 +56,7 @@ HWND hProgress = (HWND)1;
 HWND hInfo = (HWND)1;
 PFNUPDATEPROGRESS pfnUpdateProgress = 0;
 const char *g_mapName = 0, *g_mapPath = 0, *g_cwd = 0;
+HRESULT dlState = S_OK;
 
 class StatusCallback : public IBindStatusCallback {
 public:
@@ -135,7 +136,12 @@ public:
 				printf("\b \b\b");
 			printf("100%%\n");
 		}
-		return S_OK;
+		if (dlState != S_OK) {
+			HRESULT prevState = dlState;
+			dlState = S_OK;
+			return prevState;
+		}
+		return dlState;
 	}
 };
 
@@ -284,8 +290,12 @@ extern "C" {
 		g_mapName = mapName;
 		g_mapPath = mapPath;
 		g_cwd = cwd;
+		dlState = S_OK;
 		//CreateThread(0, 0, (LPTHREAD_START_ROUTINE)WorkerThread, 0, 0, 0);
 		return WorkerThread(0);
+	}
+	__declspec(dllexport) void __cdecl CancelDownload() {
+		dlState = E_ABORT;
 	}
 }
 #endif
