@@ -29,6 +29,7 @@
 #include "Socket.h"
 #include "Structs.h"
 #include "Atomic.h"
+
 CPPAPI *luaApi=0;
 Socket *socketApi=0;
 ISystem *pSystem=0;
@@ -53,6 +54,7 @@ typedef void* (__fastcall *PFNGM)(void*, void*);					//CGame::GetMenu
 typedef void* (__fastcall *PFNGMS)(void*, void*, EMENUSCREEN);		//FlashObj::GetMenuScreen
 typedef bool (__fastcall *PFNMIL)(void*, void*);					//FlashScreen::IsLoaded
 typedef int (__fastcall *PFNGU)(void*, void*, bool, unsigned int);	//CGame::Update
+typedef bool(__fastcall *PFNHFSC)(void*, void*, const char*, const char*); //MPHub::HandleFSCommand
 
 int GAME_VER=6156;
 
@@ -71,8 +73,10 @@ PFNGM pGetMenu = 0;
 PFNGMS pGetMenuScreen = 0;
 PFNMIL pMenuIsLoaded = 0;
 PFNGU pGameUpdate = 0;
+PFNHFSC pHandleFSCommand = 0;
 PFNSETUPDATEPROGRESSCALLBACK pfnSetUpdateProgressCallback = 0;
 PFNDOWNLOADMAP pfnDownloadMap = 0;
+PFNCANCELDOWNLOAD pfnCancelDownload = 0;
 
 HMODULE hMapDlLib = 0;
 
@@ -80,8 +84,8 @@ void *m_ui;
 char SvMaster[255]="m.crymp.net";
 
 bool TestGameFilesWritable();
-
 void OnUpdate(float frameTime);
+void MemScan(void *base, int size);
 
 void __stdcall MapDownloadUpdateProgress(const char *msg, bool error) {
 	mapDlMessage.set(msg);
@@ -161,10 +165,18 @@ bool __fastcall GetSelectedServer(void *self, void *addr, SServerInfo& server) {
 		char sz_ip[30];
 		int ip = server.m_publicIP;
 		int port = server.m_publicPort;
+		//MemScan(&server, 1024);
 #ifdef IS64
 		if (GAME_VER == 6156) {
-			ip = getField(int, &server, 0x80);
-			port = (int)getField(unsigned short, &server, 0x84);
+			unsigned char b = getField(unsigned char, &server, 0x38);
+			int off1 = 0x80;
+			int off2 = 0x84;
+			if (b != 0xFE) {
+				off1 += 0x40;
+				off2 += 0x40;
+			}
+			ip = getField(int, &server, off1);
+			port = (int)getField(unsigned short, &server, off2);
 		}
 		else if (GAME_VER == 5767) {
 			ip = getField(int, &server, 0x30);
@@ -201,9 +213,24 @@ void __fastcall DisconnectError(void *self, void *addr, EDisconnectionCause dc, 
 		pScriptSystem->PushFuncParam(serverMsg);
 		pScriptSystem->EndCall();
 	}
-	//unhook(pDisconnectError);
 	pDisconnectError(self, addr, dc, connecting, serverMsg);
-	//hook((void*)pDisconnectError, (void*)DisconnectError);
+}
+bool __fastcall HandleFSCommand(void *self, void *addr, const char *pCmd, const char *pArgs) {
+	IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
+	pScriptSystem->BeginCall("HandleFSCommand");
+#ifdef IS64
+	if (pArgs)
+		pScriptSystem->PushFuncParam(pArgs - 1);
+	if (pCmd)
+		pScriptSystem->PushFuncParam(pCmd);
+#else
+	if (pCmd)
+		pScriptSystem->PushFuncParam(pCmd);
+	if(pArgs)
+		pScriptSystem->PushFuncParam(pArgs);
+#endif
+	pScriptSystem->EndCall();
+	return pHandleFSCommand(self, addr, pCmd, pArgs);
 }
 int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
 	//unhook(pGameUpdate);
@@ -383,8 +410,9 @@ extern "C" {
 				hook((void*)pGetSelectedServer,(void*)GetSelectedServer);
 
 				//pDisconnectError=(PFNDE)0x39315EB0; 
-				//hook((void*)pDisconnectError,(void*)DisconnectError);
+				//hook((void*)pDisconnectError,(void*)DisconnectError);                          |
 				pDisconnectError = (PFNDE)hookp((void*)0x39315EB0, (void*)DisconnectError, 12);
+				pHandleFSCommand = (PFNHFSC)hookp((void*)0x39318560, (void*)HandleFSCommand, 12);
 				break;
 			case 6729:
 				fillNOP((void*)0x3968B0B9,6);
@@ -428,6 +456,7 @@ extern "C" {
 				//pDisconnectError=(PFNDE)0x39232D90;
 				//hook((void*)pDisconnectError,(void*)DisconnectError);
 				pDisconnectError = (PFNDE)hookp((void*)0x39232D90, (void*)DisconnectError, 7);
+				pHandleFSCommand = (PFNHFSC)hookp((void*)0x39233C50, (void*)HandleFSCommand, 14);
 				break;
 			case 6729:
 				fillNOP((void*)0x3953FF89,2);
@@ -473,6 +502,7 @@ extern "C" {
 			pfnSetUpdateProgressCallback = (PFNSETUPDATEPROGRESSCALLBACK)GetProcAddress(hMapDlLib, "SetUpdateProgressCallback");
 			pfnDownloadMap = (PFNDOWNLOADMAP)GetProcAddress(hMapDlLib, "DownloadMap");
 			pfnSetUpdateProgressCallback((void*)MapDownloadUpdateProgress);
+			pfnCancelDownload = (PFNCANCELDOWNLOAD)GetProcAddress(hMapDlLib, "CancelDownload");
 		}
 		pGame=(IGame*)createGame(ptr);
 		GAME_VER=version;

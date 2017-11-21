@@ -23,8 +23,9 @@ public:
 	int GetIP(IFunctionHandler* pH,char* host);
 	int GetMapName(IFunctionHandler* pH);
 	int Random(IFunctionHandler* pH);
-	int MapAvailable(IFunctionHandler *pH,const char *path);
+	int MapAvailable(IFunctionHandler *pH, const char *path);
 	int DownloadMap(IFunctionHandler *pH,const char*,const char *);
+	int CancelDownload(IFunctionHandler *pH);
 	int GetLocalIP(IFunctionHandler* pH);
 	int ApplyMaskAll(IFunctionHandler* pH,int mask,bool apply);
 	int ApplyMaskOne(IFunctionHandler* pH,ScriptHandle,int,bool);
