@@ -45,7 +45,7 @@ namespace Network{
 
 			const char *headers = "Content-Type: application/x-www-form-urlencoded";
 			const char *form = params.c_str();
-			LPCSTR accept[] = { "*/*" };
+			LPCSTR accept[] = { "*/*", 0 };
 
 			HINTERNET hSession = InternetOpen("SSMSafeWriting/2.8.1+",
 				INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
