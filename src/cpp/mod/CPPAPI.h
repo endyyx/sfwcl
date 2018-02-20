@@ -105,7 +105,6 @@ struct AsyncData{
 		finished(false),
 		executing(false){}
 };
-
 #define AsyncReturn(what)\
 	extern IScriptSystem *pScriptSystem;\
 	char outn[255];\
