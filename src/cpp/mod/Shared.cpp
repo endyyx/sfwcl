@@ -222,16 +222,21 @@ std::string signFile(const char *name, const char *nonce) {
 	}
 	return out;
 }
+void getGameFolder(char *cwd) {
+	GetModuleFileNameA(0, cwd, MAX_PATH);
+	std::vector<int> pos;
+	for (int i = 0, j = strlen(cwd); i < j; i++) {
+		if (cwd[i] == '\\')
+			pos.push_back(i);
+	}
+	if (pos.size() >= 2)
+		cwd[pos[pos.size() - 2]] = 0;
+}
 int decryptFile(const char *name, char **out) {
 	char path[MAX_PATH*2];
 	char cwd[MAX_PATH];
-	GetModuleFileNameA(0, cwd, 5120);
-	int last = -1;
-	for (int i = 0, j = strlen(cwd); i<j; i++) {
-		if (cwd[i] == '\\')
-			last = i;
-	}
-	sprintf(path, "%s\\..\\Mods\\sfwcl\\%s", cwd, name);
+	getGameFolder(cwd);
+	sprintf(path, "%s\\Mods\\sfwcl\\%s", cwd, name);
 	FILE *f = fopen(path, "rb");
 	if (f) {
 		fseek(f, 0, SEEK_END);
@@ -245,7 +250,7 @@ int decryptFile(const char *name, char **out) {
 			uint8_t key[] = CRYPT_KEY;
 			AES_init_ctx_iv(&ctx, key, (uint8_t*)mem + 1);
 			AES_CBC_decrypt_buffer(&ctx, mem + 17, len - 17);
-			memcpy(mem, mem + 20, len - 17);
+			memcpy(mem, mem + 17, len - 17);
 			*out = (char*)mem;
 		}
 		else *out = (char*)mem;
@@ -254,17 +259,13 @@ int decryptFile(const char *name, char **out) {
 	else *out = 0;
 	return 0;
 }
+#ifdef PRERELEASE_BUILD
 void encryptFile(const char *name, const char *out) {
-	char path[MAX_PATH * 2], outpath[MAX_PATH * 2];
-	char cwd[MAX_PATH];
-	GetModuleFileNameA(0, cwd, 5120);
-	int last = -1;
-	for (int i = 0, j = strlen(cwd); i<j; i++) {
-		if (cwd[i] == '\\')
-			last = i;
-	}
-	sprintf(path, "%s\\..\\Mods\\sfwcl\\%s", cwd, name);
-	sprintf(outpath, "%s\\..\\Mods\\sfwcl\\%s", cwd, out);
+	char cwd[MAX_PATH], path[MAX_PATH * 2], outpath[MAX_PATH * 2];
+	getGameFolder(cwd);
+	sprintf(path, "%s\\Mods\\sfwcl\\%s", cwd, name);
+	sprintf(outpath, "%s\\Mods\\sfwcl\\%s", cwd, out);
+	//MessageBoxA(0, path, outpath, 0);
 	FILE *f = fopen(path, "rb");
 	if (f) {
 		fseek(f, 0, SEEK_END);
@@ -294,3 +295,4 @@ void encryptFile(const char *name, const char *out) {
 		}
 	}
 }
+#endif

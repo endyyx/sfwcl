@@ -91,6 +91,45 @@ void __stdcall MapDownloadUpdateProgress(const char *msg, bool error) {
 	mapDlMessage.set(msg);
 }
 
+bool loadScript(const char *name) {
+	char *main = 0;
+	int len = decryptFile(name, &main);
+	if (len) {
+		bool ok = true;
+		if (pScriptSystem) {
+			if (!pScriptSystem->ExecuteBuffer(main, len)) {
+				ok = false;
+			}
+		}
+		for (int i = 0; i < len; i++) main[i] = 0;
+		free(main);
+		main = 0;
+		return ok;
+	}
+	return false;
+}
+void initScripts() {
+#ifdef PRERELEASE_BUILD
+	encryptFile("Files\\main.lua", "Files\\main.bin");
+	encryptFile("Files\\GameRules.lua", "Files\\GameRules.bin");
+#endif
+	if (!loadScript("Files\\main.bin")) {
+		// write error?
+	}
+}
+void postinitScripts() {
+	ScriptAnyValue a;
+	if (pScriptSystem->GetGlobalAny("g_gameRules", a) && a.table) {
+		bool v = false;
+		if (!a.table->GetValue("IsModified", v)) {
+			if (!loadScript("Files\\GameRules.bin")) {
+				extern ISystem *pSystem;
+				pSystem->Quit();
+			}
+		}
+	}
+}
+
 void CommandClMaster(IConsoleCmdArgs *pArgs){
 	if (pArgs->GetArgCount()>1)
 	{
@@ -233,9 +272,7 @@ bool __fastcall HandleFSCommand(void *self, void *addr, const char *pCmd, const 
 	return pHandleFSCommand(self, addr, pCmd, pArgs);
 }
 int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
-	//unhook(pGameUpdate);
-	//int res = pGameUpdate(self, addr, p1, p2);
-	//hook((void*)pGameUpdate, (void*)GameUpdate);
+	postinitScripts();
 	OnUpdate(0.0f);
 	return pGameUpdate(self, addr, p1, p2);
 }
@@ -516,6 +553,8 @@ extern "C" {
 		pConsole=pSystem->GetIConsole();
 		pConsole->AddCommand("cl_master",CommandClMaster,VF_RESTRICTEDMODE);
 		pConsole->AddCommand("reload_maps",CommandRldMaps,VF_RESTRICTEDMODE);
+
+		initScripts();
 
 		pScriptSystem->SetGlobalValue("GAME_VER",version);
 #ifdef MAX_PERFORMANCE
