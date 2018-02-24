@@ -203,7 +203,7 @@ bool autoUpdateClient(){
 }
 
 std::string signFile(const char *name, const char *nonce) {
-	char *contents;
+	char *contents = 0;
 	int len = decryptFile(name, &contents);
 	unsigned char digest[32];
 	std::string out = "";
@@ -243,6 +243,7 @@ int decryptFile(const char *name, char **out) {
 		long len = ftell(f);
 		fseek(f, 0, SEEK_SET);
 		unsigned char *mem = new unsigned char[len * 2 + 64];
+		memset(mem, 0, len * 2 + 64);
 		fread(mem, 1, len, f);
 		fclose(f);
 		if (mem[0] == 0) {
