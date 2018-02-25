@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <sstream>
 #include "Mutex.h"
+#include "Protect.h"
 //#include <mutex>
 
 #define CLIENT_BUILD 1001
@@ -557,6 +558,10 @@ extern "C" {
 		initScripts();
 
 		pScriptSystem->SetGlobalValue("GAME_VER",version);
+#ifdef _WIN64
+		extern long PROTECT_FLAG;
+		pScriptSystem->SetGlobalValue("__DUMMY0__", PROTECT_FLAG);
+#endif
 #ifdef MAX_PERFORMANCE
 		pScriptSystem->SetGlobalValue("MAX_PERFORMANCE", true);
 #endif

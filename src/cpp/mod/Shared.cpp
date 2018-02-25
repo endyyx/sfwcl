@@ -7,6 +7,7 @@
 #include <IGameFramework.h>
 #include <ICryPak.h>
 #include "Crypto.h"
+#include "Protect.h"
 //#include <stdint.h>
 
 template <int T> struct StaticBuffer{
@@ -238,7 +239,9 @@ int decryptFile(const char *name, char **out) {
 	getGameFolder(cwd);
 	sprintf(path, "%s\\Mods\\sfwcl\\%s", cwd, name);
 	FILE *f = fopen(path, "rb");
+	int ret = 0;
 	if (f) {
+
 		fseek(f, 0, SEEK_END);
 		long len = ftell(f);
 		fseek(f, 0, SEEK_SET);
@@ -255,10 +258,10 @@ int decryptFile(const char *name, char **out) {
 			*out = (char*)mem;
 		}
 		else *out = (char*)mem;
-		return strlen(*out);
-	}
-	else *out = 0;
-	return 0;
+		ret = strlen(*out);
+	} else *out = 0;
+
+	return ret;
 }
 #ifdef PRERELEASE_BUILD
 void encryptFile(const char *name, const char *out) {
