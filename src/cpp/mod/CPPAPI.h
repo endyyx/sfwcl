@@ -52,7 +52,7 @@ struct AsyncData;
 static void AsyncThread();
 void AsyncConnect(int id, AsyncData *obj);
 bool AsyncDownloadMap(int id, AsyncData *obj);
-inline void GetClosestFreeItem(AsyncData **in, int *out);
+inline void GetClosestFreeItem(int *out);
 #ifdef OLD_MSVC_DETECTED
 BOOL WINAPI DownloadMapStructEnumProc(HWND hwnd, LPARAM lParam);
 #endif
@@ -74,14 +74,14 @@ struct AsyncData{
 		g_objectsInQueue++;
 		g_mutex.Lock();
 		extern HANDLE gEvent;
-		extern AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
+		extern std::list<AsyncData*> asyncQueue;
 		extern int asyncQueueIdx;
-		GetClosestFreeItem(asyncQueue, &asyncQueueIdx);
+		GetClosestFreeItem(&asyncQueueIdx);
 		this->id = asyncQueueIdx;
 		this->finished = false;
 		this->executing = false;
 		SetEvent(gEvent);
-		asyncQueue[asyncQueueIdx] = this;
+		asyncQueue.push_back(this);
 		g_mutex.Unlock();
 		if (pH) {
 			return pH->EndFunction(asyncQueueIdx);
@@ -113,11 +113,11 @@ struct AsyncData{
 	asyncRetVal[std::string(outn)] = what
 #define GetAsyncObj(type,name) type *name=(type*)asyncQueue[id]
 #define CreateAsyncCallLua(data)\
-	GetClosestFreeItem(asyncQueue,&asyncQueueIdx);\
+	GetClosestFreeItem(&asyncQueueIdx);\
 	data->id=asyncQueueIdx;\
 	data->finished=false;\
 	data->executing=false;\
-	asyncQueue[asyncQueueIdx]=data;\
+	asyncQueue.push_back(data);\
 	SetEvent(gEvent);\
 	return pH->EndFunction(asyncQueueIdx)
 #define CreateAsyncCall(data)\

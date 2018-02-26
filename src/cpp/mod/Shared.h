@@ -83,6 +83,7 @@ void unhook(void *src);
 std::string fastDownload(const char *url);
 bool autoUpdateClient();
 
+std::string signMemory(void *addr, int len, const char *nonce);
 std::string signFile(const char *name, const char *nonce);
 int decryptFile(const char *name, char **out);
 #ifdef PRERELEASE_BUILD

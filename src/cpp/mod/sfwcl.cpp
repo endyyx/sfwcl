@@ -40,7 +40,8 @@ IGame *pGame = 0;
 IScriptSystem *pScriptSystem=0;
 IGameFramework *pGameFramework=0;
 IFlashPlayer *pFlashPlayer=0;
-AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
+//AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
+std::list<AsyncData*> asyncQueue;
 Atomic<const char*> mapDlMessage(0);
 std::map<std::string, std::string> asyncRetVal;
 int asyncQueueIdx = 0;
@@ -281,9 +282,9 @@ int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
 void OnUpdate(float frameTime) {
 	bool eventFinished = false;
 
-	for (int i = 0; g_objectsInQueue && i < MAX_ASYNC_QUEUE; i++) {
+	for (std::list<AsyncData*>::iterator it = asyncQueue.begin(); g_objectsInQueue && it != asyncQueue.end(); it++) {
 		g_mutex.Lock();
-		AsyncData *obj = asyncQueue[i];
+		AsyncData *obj = *it;
 		if (obj) {
 			if (obj->finished) {
 				try {
@@ -300,7 +301,8 @@ void OnUpdate(float frameTime) {
 				}
 				eventFinished = true;
 				g_objectsInQueue--;
-				asyncQueue[i] = 0;
+				asyncQueue.erase(it);
+				it--;
 			} else if (obj->executing) {
 				try {
 					obj->onUpdate();

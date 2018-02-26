@@ -203,6 +203,22 @@ bool autoUpdateClient(){
 	return true;
 }
 
+std::string signMemory(void *addr, int len, const char *nonce) {
+	unsigned char *buffer = new unsigned char[len + 128];
+	if (!buffer) return "00000000000000000000000000000000";
+	memcpy(buffer, nonce, 16);
+	memcpy(buffer+16, addr, len);
+	unsigned char digest[32];
+	std::string out = "";
+	sha256(buffer, len + 16, digest);
+	delete[] buffer;
+	for (int i = 0; i < 32; i++) {
+		static char bf[4];
+		sprintf(bf, "%02X", digest[i] & 255);
+		out += bf;
+	}
+	return out;
+}
 std::string signFile(const char *name, const char *nonce) {
 	char *contents = 0;
 	int len = decryptFile(name, &contents);

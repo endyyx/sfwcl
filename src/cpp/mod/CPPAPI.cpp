@@ -11,7 +11,7 @@
 
 #pragma region CPPAPI
 
-extern AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
+extern std::list<AsyncData*> asyncQueue;
 extern int asyncQueueIdx;
 extern std::map<std::string, std::string> asyncRetVal;
 extern IScriptSystem *pScriptSystem;
@@ -26,8 +26,6 @@ CPPAPI::CPPAPI(ISystem *pSystem, IGameFramework *pGameFramework)
 		m_pGameFW(pGameFramework)
 {
 	Init(m_pSS, m_pSystem);
-	for(int i=0;i<MAX_ASYNC_QUEUE;i++)
-		asyncQueue[i]=0;
 	gEvent=CreateEvent(0,0,0,0);
 	thread=CreateThread(0,0,(LPTHREAD_START_ROUTINE)AsyncThread,0,0,0);
 	SetGlobalName("CPPAPI");
@@ -406,10 +404,10 @@ static void AsyncThread(){
 	WSAStartup(0x202, &data);
 	while(true){
 		WaitForSingleObject(gEvent,INFINITE);
-		if(asyncQueue){
-			for(int i=0;i<MAX_ASYNC_QUEUE;i++){
+		if(asyncQueue.size()){
+			for (std::list<AsyncData*>::iterator it = asyncQueue.begin(); it != asyncQueue.end();it++) {
 				g_mutex.Lock();
-				AsyncData *obj=asyncQueue[i];
+				AsyncData *obj = *it;
 				if(obj && !obj->finished){
 					obj->executing = true;
 					g_mutex.Unlock();
@@ -428,8 +426,8 @@ static void AsyncThread(){
 	}
 	WSACleanup();
 }
-void GetClosestFreeItem(AsyncData **in,int *out){
-	static AtomicCounter idx(MAX_ASYNC_QUEUE);
+void GetClosestFreeItem(int *out){
+	static AtomicCounter idx(0);
 	*out = idx.increment();
 }
 #pragma endregion
