@@ -33,6 +33,7 @@ public:
 	int MsgBox(IFunctionHandler* pH,const char *text,const char* title=0,int mask=MB_OK);
 	int AsyncDownloadMap(IFunctionHandler *pH, const char *mapn, const char *mapdl);
 	int ToggleLoading(IFunctionHandler *pH, const char *text, bool loading = true, bool reset = true);
+	int SignMemory(IFunctionHandler *pH, const char *addr1, const char *addr2, int len, const char *nonce, const char *id);
 	//int ClearLayer(IFunctionHandler* pH,int layer);
 protected:
 	void RegisterMethods();

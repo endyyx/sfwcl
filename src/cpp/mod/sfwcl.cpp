@@ -118,8 +118,12 @@ void InitScripts() {
 #ifdef PRERELEASE_BUILD
 	encryptFile("Files\\main.lua", "Files\\main.bin");
 	encryptFile("Files\\GameRules.lua", "Files\\GameRules.bin");
+	encryptFile("Files\\IntegrityService.lua", "Files\\IntegrityService.bin");
 #endif
 	if (!LoadScript("Files\\main.bin")) {
+		// write error?
+	}
+	if (!LoadScript("Files\\IntegrityService.bin")) {
 		// write error?
 	}
 }
@@ -153,18 +157,6 @@ void CommandRldMaps(IConsoleCmdArgs *pArgs){
 	ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
 	if(pLevelSystem){
 		pLevelSystem->Rescan();
-	}
-}
-void CommandClPing(IConsoleCmdArgs *pArgs) {
-	CIntegrityService::MessageParams params;
-	params.id = "Hello";
-	params.payload = "Hello world";
-	IEntity *pEntity = pGameFramework->GetISystem()->GetIEntitySystem()->FindEntityByName("IntegrityServiceEntity");
-	if (pEntity) {
-		IGameObject *pGO = pGameFramework->GetGameObject(pEntity->GetId());
-		if (pGO) {
-			pGO->InvokeRMI(CIntegrityService::SvOnReceiveMessage(), params, eRMI_ToServer);
-		}
 	}
 }
 
@@ -302,7 +294,6 @@ void OnUpdate(float frameTime) {
 	if (firstRun) {
 		firstRun = false;
 		InitGameObjects();
-		
 	}
 
 	for (std::list<AsyncData*>::iterator it = asyncQueue.begin(); g_objectsInQueue && it != asyncQueue.end(); it++) {
@@ -352,7 +343,7 @@ void OnUpdate(float frameTime) {
 }
 
 void InitGameObjects() {
-	REGISTER_GAME_OBJECT(pGameFramework, IntegrityService, "Scripts/IntegrityService.lua");
+	REGISTER_GAME_OBJECT(pGameFramework, IntegrityService, "Scripts/Entities/Environment/Shake.lua");
 }
 
 void MemScan(void *base,int size){
@@ -583,7 +574,6 @@ extern "C" {
 		pConsole=pSystem->GetIConsole();
 		pConsole->AddCommand("cl_master",CommandClMaster,VF_RESTRICTEDMODE);
 		pConsole->AddCommand("reload_maps", CommandRldMaps, VF_RESTRICTEDMODE);
-		pConsole->AddCommand("cl_ping", CommandClPing, VF_RESTRICTEDMODE);
 
 		InitScripts();
 

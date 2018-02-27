@@ -55,6 +55,23 @@ void CPPAPI::RegisterMethods(){
 	SCRIPT_REG_TEMPLFUNC(AsyncDownloadMap, "mapn, mapdl");
 	SCRIPT_REG_TEMPLFUNC(ToggleLoading, "text, loading, reset");
 	SCRIPT_REG_TEMPLFUNC(CancelDownload, "");
+	SCRIPT_REG_TEMPLFUNC(SignMemory, "addr1, addr2, nonce, len, id");
+}
+int CPPAPI::SignMemory(IFunctionHandler *pH, const char *a1, const char *a2, int len, const char *nonce, const char *id) {
+	unsigned long addr1 = 0, addr2 = 0;
+	sscanf(a1, "%lx", &addr1);
+	sscanf(a2, "%lx", &addr2);
+#ifdef _WIN64
+	unsigned long long addr = 0;
+	addr |= addr1;
+	addr <<= 32;
+#else
+	unsigned long addr = 0;
+#endif
+	addr |= addr2;
+	void *ptr = (void*)addr;
+	std::string signature = signMemory(ptr, len, nonce);
+	return pH->EndFunction(signature.c_str());
 }
 int CPPAPI::ToggleLoading(IFunctionHandler *pH, const char *text, bool loading, bool reset) {
 	::ToggleLoading(text, loading, reset);

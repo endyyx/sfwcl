@@ -144,6 +144,12 @@ function OnUpdate(frameTime, inQueue, frame)
 	end
 	return 1;
 end
+function InitGameObjects()
+	--...
+end
+function OnServerMessage(msg)
+	--...
+end
 function HandleFSCommand(cmd, args)
 	--printf("HandleFSCommand(%s, %s)", cmd or "<unknown>", args or "<unknown>")
 	if cmd=="JoinServer" then
@@ -635,9 +641,9 @@ function CheckSelectedServer(ip,port,mapname)
 	end);
 end
 function Login(name,pwd,secu,callback)
-	LOGGED_IN=false;
-	LOG_NAME=nil;
-	LOG_PWD=nil;
+	--LOGGED_IN=false;
+	--LOG_NAME=nil;
+	--LOG_PWD=nil;
 	local url="";
 	if secu or LOGIN_SECU then
 		url=urlfmt("/api/login_svc_secu.php?a=%s&b=%s",name,pwd);
