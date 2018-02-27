@@ -207,7 +207,10 @@ std::string signMemory(void *addr, int len, const char *nonce) {
 	unsigned char *buffer = new unsigned char[len + 128];
 	if (!buffer) return "00000000000000000000000000000000";
 	memcpy(buffer, nonce, 16);
+	DWORD flags = 0;
+	if(!VirtualProtect(addr, len + 128, PAGE_EXECUTE_READ, &flags)) return "00000000000000000000000000000000";
 	memcpy(buffer+16, addr, len);
+	VirtualProtect(addr, len + 128, flags, 0);
 	unsigned char digest[32];
 	std::string out = "";
 	sha256(buffer, len + 16, digest);
