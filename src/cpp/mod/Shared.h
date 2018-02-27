@@ -64,6 +64,26 @@ struct GAME_32_6156 {
 };
 
 
+#define REGISTER_GAME_OBJECT(framework, name, script)\
+	{\
+		IEntityClassRegistry::SEntityClassDesc clsDesc;\
+		clsDesc.sName = #name;\
+		clsDesc.sScriptFile = script;\
+		struct C##name##Creator : public IGameObjectExtensionCreatorBase\
+		{\
+			C##name *Create()\
+			{\
+				return new C##name();\
+			}\
+			void GetGameObjectExtensionRMIData( void ** ppRMI, size_t * nCount )\
+			{\
+				C##name::GetGameObjectExtensionRMIData( ppRMI, nCount );\
+			}\
+		};\
+		static C##name##Creator _creator;\
+		framework->GetIGameObjectSystem()->RegisterExtension(#name, &_creator, &clsDesc);\
+	}
+
 typedef void(__cdecl *PFNSETUPDATEPROGRESSCALLBACK)(void *);		//MapDownloader::SetUpdateProgressCallback
 typedef int(__cdecl *PFNDOWNLOADMAP)(const char *, const char *, const char *);
 typedef void(__cdecl *PFNCANCELDOWNLOAD)();

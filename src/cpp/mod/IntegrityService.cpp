@@ -1,16 +1,23 @@
 #include "IntegrityService.h"
+#include <IScriptSystem.h>
+//#include <IActorSystem.h>
+#include <Windows.h>
 
-bool IntegrityService::Init(IGameObject *pGameObject) {
+CIntegrityService* CIntegrityService::instance = 0;
+
+bool CIntegrityService::Init(IGameObject *pGameObject) {
+	if (!pGameObject) return false;
 	SetGameObject(pGameObject);
+	MessageBoxA(0, "IntegrityService::Init", 0, 0);
 	if (!GetGameObject()->BindToNetwork())
 		return false;
 	return true;
 }
-IMPLEMENT_RMI(IntegrityService, SvRequestMemoryCheck) {
+IMPLEMENT_RMI(CIntegrityService, SvRequestMemoryCheck) {
 	/* none of our business here */
 	return true;
 }
-IMPLEMENT_RMI(IntegrityService, ClRequestMemoryCheck) {
+IMPLEMENT_RMI(CIntegrityService, ClRequestMemoryCheck) {
 #ifdef _WIN64
 	unsigned long long addr = 0;
 	addr |= params.addr1;
@@ -28,5 +35,20 @@ IMPLEMENT_RMI(IntegrityService, ClRequestMemoryCheck) {
 	back.addr2 = params.addr2;
 	back.payload = signature.c_str();
 	GetGameObject()->InvokeRMI(SvRequestMemoryCheck(), back, eRMI_ToServer);
+	return true;
+}
+IMPLEMENT_RMI(CIntegrityService, SvOnReceiveMessage) {
+	/* none of our business */
+	MessageBoxA(0, "Received message", 0, 0);
+	MessageBoxA(0, params.payload.c_str(), 0, 0);
+	return true;
+}
+IMPLEMENT_RMI(CIntegrityService, ClOnReceiveMessage) {
+	//client side
+	extern IScriptSystem *pScriptSystem;
+	pScriptSystem->BeginCall("OnMessage");
+	pScriptSystem->PushFuncParam(params.id.c_str());
+	pScriptSystem->PushFuncParam(params.payload.c_str());
+	pScriptSystem->EndCall();
 	return true;
 }

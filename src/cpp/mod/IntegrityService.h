@@ -7,11 +7,18 @@
 #include <IGameObject.h>
 #include <ISerialize.h>
 
-#define VERIFY_SERVER	"m.crymp.net"
-#define VERIFY_PORT		2900
-
-struct IntegrityService :
-	public CGameObjectExtensionHelper<IntegrityService, IGameObjectExtension, 64> {
+struct CIntegrityService :
+	public CGameObjectExtensionHelper<CIntegrityService, IGameObjectExtension, 32> {
+	static CIntegrityService* instance;
+	struct MessageParams {
+		MessageParams() {}
+		MessageParams(string ID, string data) : id(ID), payload(data) {}
+		string payload, id;
+		void SerializeWith(TSerialize ser) {
+			ser.Value("payload", payload);
+			ser.Value("id", id);
+		}
+	};
 	struct MemoryCheckParams {
 		MemoryCheckParams() {};
 		MemoryCheckParams(int a1, int a2, int l) : addr1(a1), addr2(a2), len(l) {};
@@ -22,15 +29,15 @@ struct IntegrityService :
 		string id;
 		void SerializeWith(TSerialize ser)
 		{
-			ser.Value("addr1", addr1, 'adr1');
-			ser.Value("addr2", addr2, 'adr2');
-			ser.Value("length", len, 'leng');
-			ser.Value("payload", payload, 'pald');
-			ser.Value("id", id, 'id__');
+			ser.Value("addr1", addr1);
+			ser.Value("addr2", addr2);
+			ser.Value("length", len);
+			ser.Value("payload", payload);
+			ser.Value("id", id);
 		}
 	};
-	IntegrityService() {
-		
+	CIntegrityService() {
+		instance = this;
 	}
 	virtual bool Init(IGameObject *pGameObject);
 	virtual void PostInit(IGameObject * pGameObject) {}
@@ -51,8 +58,11 @@ struct IntegrityService :
 	virtual void PostRemoteSpawn() {}
 	virtual void GetMemoryStatistics(ICrySizer * s) {}
 
-	DECLARE_SERVER_RMI_NOATTACH(SvRequestMemoryCheck, MemoryCheckParams, eNRT_ReliableOrdered);
-	DECLARE_SERVER_RMI_NOATTACH(ClRequestMemoryCheck, MemoryCheckParams, eNRT_ReliableOrdered);
+	DECLARE_SERVER_RMI_NOATTACH(SvRequestMemoryCheck, MemoryCheckParams, eNRT_ReliableUnordered);
+	DECLARE_SERVER_RMI_NOATTACH(ClRequestMemoryCheck, MemoryCheckParams, eNRT_ReliableUnordered);
+
+	DECLARE_SERVER_RMI_NOATTACH(SvOnReceiveMessage, MessageParams, eNRT_ReliableUnordered);
+	DECLARE_SERVER_RMI_NOATTACH(ClOnReceiveMessage, MessageParams, eNRT_ReliableUnordered);
 };
 
 #endif

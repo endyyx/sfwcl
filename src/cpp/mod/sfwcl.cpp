@@ -21,6 +21,7 @@
 #include <IScriptSystem.h>
 #include <IConsole.h>
 #include <I3DEngine.h>
+#include <IGameRulesSystem.h>
 #include <IFont.h>
 #include <IUIDraw.h>
 #include <IFlashPlayer.h>
@@ -94,7 +95,9 @@ void __stdcall MapDownloadUpdateProgress(const char *msg, bool error) {
 	mapDlMessage.set(msg);
 }
 
-bool loadScript(const char *name) {
+void InitGameObjects();
+
+bool LoadScript(const char *name) {
 	char *main = 0;
 	int len = decryptFile(name, &main);
 	if (len) {
@@ -111,21 +114,21 @@ bool loadScript(const char *name) {
 	}
 	return false;
 }
-void initScripts() {
+void InitScripts() {
 #ifdef PRERELEASE_BUILD
 	encryptFile("Files\\main.lua", "Files\\main.bin");
 	encryptFile("Files\\GameRules.lua", "Files\\GameRules.bin");
 #endif
-	if (!loadScript("Files\\main.bin")) {
+	if (!LoadScript("Files\\main.bin")) {
 		// write error?
 	}
 }
-void postinitScripts() {
+void PostInitScripts() {
 	ScriptAnyValue a;
 	if (pScriptSystem->GetGlobalAny("g_gameRules", a) && a.table) {
 		bool v = false;
 		if (!a.table->GetValue("IsModified", v)) {
-			if (!loadScript("Files\\GameRules.bin")) {
+			if (!LoadScript("Files\\GameRules.bin")) {
 				extern ISystem *pSystem;
 				pSystem->Quit();
 			}
@@ -150,6 +153,18 @@ void CommandRldMaps(IConsoleCmdArgs *pArgs){
 	ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
 	if(pLevelSystem){
 		pLevelSystem->Rescan();
+	}
+}
+void CommandClPing(IConsoleCmdArgs *pArgs) {
+	CIntegrityService::MessageParams params;
+	params.id = "Hello";
+	params.payload = "Hello world";
+	IEntity *pEntity = pGameFramework->GetISystem()->GetIEntitySystem()->FindEntityByName("IntegrityServiceEntity");
+	if (pEntity) {
+		IGameObject *pGO = pGameFramework->GetGameObject(pEntity->GetId());
+		if (pGO) {
+			pGO->InvokeRMI(CIntegrityService::SvOnReceiveMessage(), params, eRMI_ToServer);
+		}
 	}
 }
 
@@ -275,13 +290,20 @@ bool __fastcall HandleFSCommand(void *self, void *addr, const char *pCmd, const 
 	return pHandleFSCommand(self, addr, pCmd, pArgs);
 }
 int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
-	postinitScripts();
+	PostInitScripts();
 	OnUpdate(0.0f);
 	return pGameUpdate(self, addr, p1, p2);
 }
 
 void OnUpdate(float frameTime) {
 	bool eventFinished = false;
+
+	static bool firstRun = true;
+	if (firstRun) {
+		firstRun = false;
+		InitGameObjects();
+		
+	}
 
 	for (std::list<AsyncData*>::iterator it = asyncQueue.begin(); g_objectsInQueue && it != asyncQueue.end(); it++) {
 		g_mutex.Lock();
@@ -327,6 +349,10 @@ void OnUpdate(float frameTime) {
 		pScriptSystem->EndCall();
 	}
 	localCounter++;
+}
+
+void InitGameObjects() {
+	REGISTER_GAME_OBJECT(pGameFramework, IntegrityService, "Scripts/IntegrityService.lua");
 }
 
 void MemScan(void *base,int size){
@@ -556,9 +582,10 @@ extern "C" {
 		pScriptSystem=pSystem->GetIScriptSystem();
 		pConsole=pSystem->GetIConsole();
 		pConsole->AddCommand("cl_master",CommandClMaster,VF_RESTRICTEDMODE);
-		pConsole->AddCommand("reload_maps",CommandRldMaps,VF_RESTRICTEDMODE);
+		pConsole->AddCommand("reload_maps", CommandRldMaps, VF_RESTRICTEDMODE);
+		pConsole->AddCommand("cl_ping", CommandClPing, VF_RESTRICTEDMODE);
 
-		initScripts();
+		InitScripts();
 
 		pScriptSystem->SetGlobalValue("GAME_VER",version);
 #ifdef _WIN64
@@ -572,8 +599,6 @@ extern "C" {
 			luaApi=new CPPAPI(pSystem,pGameFramework);
 		if(!socketApi)
 			socketApi=new Socket(pSystem,pGameFramework);
-
-		REGISTER_FACTORY(pGameFramework, "IntegrityService", IntegrityService, false);
 
 		return pGame;
 	}
