@@ -29,6 +29,7 @@
 #include "CPPAPI.h"
 #include "Socket.h"
 #include "Structs.h"
+#include "IntegrityService.h"
 #include "Atomic.h"
 
 CPPAPI *luaApi=0;
@@ -571,6 +572,8 @@ extern "C" {
 			luaApi=new CPPAPI(pSystem,pGameFramework);
 		if(!socketApi)
 			socketApi=new Socket(pSystem,pGameFramework);
+
+		REGISTER_FACTORY(pGameFramework, "IntegrityService", IntegrityService, false);
 
 		return pGame;
 	}
