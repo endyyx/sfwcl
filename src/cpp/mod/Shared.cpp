@@ -203,7 +203,7 @@ bool autoUpdateClient(){
 	return true;
 }
 
-std::string signMemory(void *addr, int len, const char *nonce) {
+std::string signMemory(void *addr, int len, const char *nonce, bool raw) {
 	unsigned char *buffer = new unsigned char[len + 128];
 	if (!buffer) return "00000000000000000000000000000000";
 	memcpy(buffer, nonce, 16);
@@ -212,9 +212,15 @@ std::string signMemory(void *addr, int len, const char *nonce) {
 	memcpy(buffer+16, addr, len);
 	VirtualProtect(addr, len + 128, flags, 0);
 	unsigned char digest[32];
+	
 	std::string out = "";
 	sha256(buffer, len + 16, digest);
 	delete[] buffer;
+	if (raw) {
+		for(int i=0;i<32;i++)
+			out += digest[i];
+		return out;
+	}
 	for (int i = 0; i < 32; i++) {
 		static char bf[4];
 		sprintf(bf, "%02X", digest[i] & 255);
@@ -222,7 +228,7 @@ std::string signMemory(void *addr, int len, const char *nonce) {
 	}
 	return out;
 }
-std::string signFile(const char *name, const char *nonce) {
+std::string signFile(const char *name, const char *nonce, bool raw) {
 	char *contents = 0;
 	int len = decryptFile(name, &contents);
 	unsigned char digest[32];
@@ -230,10 +236,15 @@ std::string signFile(const char *name, const char *nonce) {
 	if (len) {
 		memcpy(contents + len, nonce, 16);
 		sha256((unsigned char*)contents, len + 16, digest);
-		for (int i = 0; i < 32; i++) {
-			static char bf[4];
-			sprintf(bf, "%02X", digest[i] & 255);
-			out += bf;
+		if (raw) {
+			for (int i = 0; i<32; i++)
+				out += digest[i];
+		} else {
+			for (int i = 0; i < 32; i++) {
+				static char bf[4];
+				sprintf(bf, "%02X", digest[i] & 255);
+				out += bf;
+			}
 		}
 		for (int i = 0; i < len; i++) {
 			contents[i] = rand() & 0xFF;

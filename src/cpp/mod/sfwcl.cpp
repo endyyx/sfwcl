@@ -568,6 +568,7 @@ extern "C" {
 		hook(gethostbyname,Hook_GetHostByName);
 		g_gameFilesWritable = TestGameFilesWritable();
 
+
 		pGameFramework=(IGameFramework*)ptr;
 		pSystem=pGameFramework->GetISystem();
 		pScriptSystem=pSystem->GetIScriptSystem();
@@ -585,6 +586,7 @@ extern "C" {
 #ifdef MAX_PERFORMANCE
 		pScriptSystem->SetGlobalValue("MAX_PERFORMANCE", true);
 #endif
+
 		if(!luaApi)
 			luaApi=new CPPAPI(pSystem,pGameFramework);
 		if(!socketApi)

@@ -4,8 +4,11 @@
 #include <IVehicleSystem.h>
 #include <IGameObjectSystem.h>
 #include <CryThread.h>
+#include <sstream>
+#include <string>
 #include "AtomicCounter.h"
 #include "Atomic.h"
+#include "Crypto.h"
 //#include <mutex>
 //#include <functional>
 
@@ -57,21 +60,42 @@ void CPPAPI::RegisterMethods(){
 	SCRIPT_REG_TEMPLFUNC(CancelDownload, "");
 	SCRIPT_REG_TEMPLFUNC(SignMemory, "addr1, addr2, nonce, len, id");
 }
-int CPPAPI::SignMemory(IFunctionHandler *pH, const char *a1, const char *a2, int len, const char *nonce, const char *id) {
-	unsigned long addr1 = 0, addr2 = 0;
-	sscanf(a1, "%lx", &addr1);
-	sscanf(a2, "%lx", &addr2);
+int CPPAPI::SignMemory(IFunctionHandler *pH, const char *a1, const char *a2, const char *len, const char *nonce, const char *id) {
+	std::stringstream a1s, a2s, ls, ns;
+	a1s << a1;
+	a2s << a2;
+	ls << len;
+	ns << nonce;
+	std::string pa1, pa2, pl, pn;
+	std::string h = "";
+	while ((a1s >> pa1) && (a2s >> pa2) && (ls >> pl) && (ns >> pn)) {
+		if (isdigit(pa1[0])) {
+			unsigned long addr1 = 0, addr2 = 0;
+			sscanf(pa1.c_str(), "%lx", &addr1);
+			sscanf(pa2.c_str(), "%lx", &addr2);
 #ifdef _WIN64
-	unsigned long long addr = 0;
-	addr |= addr1;
-	addr <<= 32;
+			unsigned long long addr = 0;
+			addr |= addr1;
+			addr <<= 32;
 #else
-	unsigned long addr = 0;
+			unsigned long addr = 0;
 #endif
-	addr |= addr2;
-	void *ptr = (void*)addr;
-	std::string signature = signMemory(ptr, len, nonce);
-	return pH->EndFunction(signature.c_str());
+			addr |= addr2;
+			void *ptr = (void*)addr;
+			h += signMemory(ptr, atoi(pl.c_str()), pn.c_str(), true);
+		} else if (pa1 == "file") {
+
+		}
+	}
+	std::string hash = "";
+	unsigned char digest[32];
+	sha256((const unsigned char*)h.c_str(), h.size(), digest);
+	for (int i = 0; i < 32; i++) {
+		static char bf[4];
+		sprintf(bf, "%02X", digest[i] & 255);
+		hash += bf;
+	}
+	return pH->EndFunction(hash.c_str());
 }
 int CPPAPI::ToggleLoading(IFunctionHandler *pH, const char *text, bool loading, bool reset) {
 	::ToggleLoading(text, loading, reset);
