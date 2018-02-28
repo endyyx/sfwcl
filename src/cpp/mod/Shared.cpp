@@ -249,7 +249,7 @@ std::string SignFile(const char *name, const char *nonce, bool raw) {
 		for (int i = 0; i < len; i++) {
 			contents[i] = rand() & 0xFF;
 		}
-		free(contents);
+		delete[] contents;
 	}
 	return out;
 }

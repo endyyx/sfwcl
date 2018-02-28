@@ -11,7 +11,7 @@ end
 
 function SfwclTest()
 	if CryAction.IsServer() then
-		RequestSignature("$1", "001122334455677", "00000000", "39000000", "48")
+		RequestSignature(1, "$1", "0o5/oKaAWzKmgIJ2 BzOUBK3NNcD7d3Eb wxd6E9jWbK2qhXCA", "0 0 0", "39076A88 391CD151 3919CF3F", "37 33 36")
 	else
 		SendMessage("Hello world")
 	end

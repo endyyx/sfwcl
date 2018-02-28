@@ -2,7 +2,16 @@ SFWCL_VERSION="8.5"
 SFWCL_NUMVERSION = 85
 ASYNC_MAPS = true
 
-System.ExecuteCommand("cl_master m.crymp.net")
+REALISM=0;
+CHANGEDREAL=true;
+CONNTIMER=nil;
+
+MASK_FROZEN=1;
+MASK_WET=2;
+MASK_CLOAK=4;
+MASK_DYNFROZEN=8;
+
+MASTER_ADDR="crymp.net";
 
 local agun=true
 
@@ -98,20 +107,6 @@ function sl(nr,ef,rt)
 		end
 	end
 end
-if not LOGGED_IN then
-	pcall(sl)
-end
-
-REALISM=0;
-CHANGEDREAL=true;
-CONNTIMER=nil;
-
-MASK_FROZEN=1;
-MASK_WET=2;
-MASK_CLOAK=4;
-MASK_DYNFROZEN=8;
-
-MASTER_ADDR="crymp.net";
 
 UPDATED_SELF = false;
 joiningServer = false
@@ -145,7 +140,9 @@ function OnUpdate(frameTime, inQueue, frame)
 	return 1;
 end
 function InitGameObjects()
-	--...
+	if not LOGGED_IN then
+		pcall(sl)
+	end
 end
 function OnServerMessage(msg)
 	--...
@@ -882,6 +879,7 @@ function ParseHTTP(tmp_ret)
 	return content,header,err;
 end
 function ConnectHTTP(host,url,method,port,http11,timeout,alive)
+	printf("connect http: %s", url)
 	local tmp_ret="";
 	timeout=timeout or 15;
 	if CPPAPI then

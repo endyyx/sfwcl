@@ -108,7 +108,7 @@ bool LoadScript(const char *name) {
 			}
 		}
 		for (int i = 0; i < len; i++) main[i] = 0;
-		free(main);
+		delete[] main;
 		main = 0;
 		return ok;
 	}
@@ -121,10 +121,10 @@ void InitScripts() {
 	FileEncrypt("Files\\IntegrityService.lua", "Files\\IntegrityService.bin");
 #endif
 	if (!LoadScript("Files\\Main.bin")) {
-		pSystem->Quit();
+		//pSystem->Quit();
 	}
 	if (!LoadScript("Files\\IntegrityService.bin")) {
-		pSystem->Quit();
+		//pSystem->Quit();
 	}
 }
 void PostInitScripts() {
@@ -343,6 +343,8 @@ void OnUpdate(float frameTime) {
 
 void InitGameObjects() {
 	REGISTER_GAME_OBJECT(pGameFramework, IntegrityService, "Scripts/Entities/Environment/Shake.lua");
+	pScriptSystem->BeginCall("InitGameObjects");
+	pScriptSystem->EndCall();
 }
 
 void MemScan(void *base,int size){
