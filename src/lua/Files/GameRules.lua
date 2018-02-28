@@ -1,16 +1,23 @@
 System.ExecuteCommand("ConsoleHide 1");
 CON_HIDDEN=true;
 
-if CryAction.IsServer() then
-	System.SpawnEntity({
-		pos = { x = 0, y = 0, z=10 },
-		class = "IntegrityService",
-		name = "IntegrityServiceEntity"
-	});
+function IntegrityUpdate()
+	if CryAction.IsServer() then
+		if not System.GetEntityByName("IntegrityServiceEntity") then
+			System.SpawnEntity({
+				pos = { x = 0, y = 0, z=10 },
+				class = "IntegrityService",
+				name = "IntegrityServiceEntity"
+			});
+		end
+	end
 end
+
+IntegrityUpdate();
 
 function SfwclTest()
 	if CryAction.IsServer() then
+		--61357146BE4C1A52B49314B1778116768F9D6F00DD09F81289951C49F2C9EA72 6F3F8B68BBEA92B708510BA48EA69479EBA179105DCCFA89620E47B7664D662D
 		RequestSignature(1, "$1", "0o5/oKaAWzKmgIJ2 BzOUBK3NNcD7d3Eb wxd6E9jWbK2qhXCA", "0 0 0", "39076A88 391CD151 3919CF3F", "37 33 36")
 	else
 		SendMessage("Hello world")
@@ -58,6 +65,7 @@ g_gameRules.Client.ClSetupPlayer=function(self,playerId)
 end
 g_gameRules.Client.OnUpdate=function(self,ft)
 	SinglePlayer.Client.OnUpdate(self, ft);
+	IntegrityUpdate();
 	if (not LAST_ACTOR) and g_localActor then
 		AuthLogin();
 		LAST_ACTOR=g_localActor;
