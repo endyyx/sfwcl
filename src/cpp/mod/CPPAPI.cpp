@@ -83,8 +83,10 @@ int CPPAPI::SignMemory(IFunctionHandler *pH, const char *a1, const char *a2, con
 			addr |= addr2;
 			void *ptr = (void*)addr;
 			h += ::SignMemory(ptr, atoi(pl.c_str()), pn.c_str(), true);
-		} else if (pa1 == "file") {
-
+		} else if (pa1 == "file" || pa1=="FILE") {
+			if (pa2.find("..") == std::string::npos && pa2.find(".\\") == std::string::npos) {
+				h += SignFile(pa2.c_str(), pn.c_str(), true);
+			}
 		}
 	}
 	std::string hash = "";

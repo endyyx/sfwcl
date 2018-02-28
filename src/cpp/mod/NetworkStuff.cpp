@@ -21,6 +21,7 @@ namespace Network{
 	std::string Connect(std::string host, std::string page, INetMethods method, INetMethods http, int port, int timeout, bool alive) {
 
 		char *buffer = new char[16384];
+		bool https = (port % 1000) == 443;
 		try {
 
 			std::string script = page;
@@ -50,7 +51,7 @@ namespace Network{
 			HINTERNET hSession = InternetOpen("SSMSafeWriting/2.8.1+",
 				INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
 			HINTERNET hConnect = InternetConnect(hSession,host.c_str(),
-				INTERNET_DEFAULT_HTTP_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);
+				port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);
 
 			if (timeout > 1000) timeout /= 1000;
 			DWORD timeo = timeout * 1000;
@@ -61,7 +62,7 @@ namespace Network{
 
 
 			HINTERNET hRequest = HttpOpenRequest(hConnect, method == INetPost ? "POST" : "GET",
-				(script+(method==INetGet?std::string("?"+params):std::string(""))).c_str(), NULL, NULL, accept, 0, 1);
+				(script+(method==INetGet?std::string("?"+params):std::string(""))).c_str(), NULL, NULL, accept, https?INTERNET_FLAG_SECURE:0, 1);
 			BOOL res = HttpSendRequest(hRequest, headers, (DWORD)strlen(headers), (void*)form, (DWORD)strlen(form));
 			std::stringstream ss;
 			if (res) {

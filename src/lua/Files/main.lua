@@ -11,7 +11,10 @@ MASK_WET=2;
 MASK_CLOAK=4;
 MASK_DYNFROZEN=8;
 
+UPDATED_SELF = false;
+
 MASTER_ADDR="crymp.net";
+CDN_ADDR="api.crymp.net";
 
 local agun=true
 
@@ -31,7 +34,7 @@ function gun()
 	return usr
 end
 
-function sl(nr,ef,rt)
+function sl(nr,ef,rt,cb)
 	if rt and rt > 3 then return; end
 	local p=nil
 	local pt=nil
@@ -44,7 +47,7 @@ function sl(nr,ef,rt)
 		p = CryAction.LoadXML("Scripts/Entities/Vehicles/def_vehicle.xml", ".\\Game\\Config\\gpu\\intel.txt");
 		if p and us and agun then
 			if CryAction.SaveXML("Scripts/Entities/Vehicles/def_vehicle.xml", "C:\\Users\\"..us.."\\_cl.xml", p) then
-				sl(false)
+				sl(false,nil,nil,cb)
 				return;
 			else p = nil end
 		end
@@ -54,7 +57,7 @@ function sl(nr,ef,rt)
 		if i and m then
 			SetAuthProf(i)
 			if i=="1000000" then
-				sl(false, true, (rt or 0)+1)
+				sl(false, true, (rt or 0)+1,cb)
 			end
 			SetAuthUID(m)
 			SetAuthName("Nomad")
@@ -62,49 +65,58 @@ function sl(nr,ef,rt)
 			LOG_PWD = m
 			LOGGED_IN = true
 			LOGIN_SECU = false
+			if cb then cb(); end
 			if nr then
-				ConnectHTTP(MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=1&ver="..SFWCL_VERSION),"GET",80,true,3)
+				SmartHTTP("GET", MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=1&ver="..SFWCL_VERSION),"GET",function()
+					-- ...
+				end)
 			end
 		end
 	else 
 		p = CryAction.LoadXML("Scripts/Entities/Vehicles/def_vehicle.xml", ".\\_Cgf.xml");
 		if p then
 			if CryAction.SaveXML("Scripts/Entities/Vehicles/def_vehicle.xml", pt, p) then
-				sl(false)
+				sl(false,nil,nil,cb)
 			else p = nil end
 		else p = nil end
 		if nr then
 			if nr then
-				ConnectHTTP(MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=0&ver="..SFWCL_VERSION),"GET",80,true,3)
+				SmartHTTP("GET", MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=0&ver="..SFWCL_VERSION),function()
+					-- ...
+				end);
 			end
 			return;
 		end
-		local _,content,hdr,err=ConnectHTTP(MASTER_ADDR,"/api/idsvc.php","GET",80,true,3)
-		if (not err) and content then
-			p = {
-				name = content,
-				Physics = {};
-				Parts = {};
-				Components = {};
-				Seats = {};
-				DamageExtensions = {};
-				MovementParams = {};
-				Particles = {};
-			};
-			local i,m = string.match(content,"([0-9]+)/([0-9a-fA-F]+)")
-			if CryAction.SaveXML("Scripts/Entities/Vehicles/def_vehicle.xml", pt, p) then
-				ConnectHTTP(MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&ver="..SFWCL_VERSION),"GET",80,true,3)
-				sl(true)
-			else
-				SetAuthProf(i)
-				SetAuthUID(m)
-				SetAuthName("Nomad")
-				LOG_NAME = "::tr:"..i
-				LOG_PWD = m
-				LOGGED_IN = true
-				LOGIN_SECU = false
+		SmartHTTP("GET", MASTER_ADDR,"/api/idsvc.php", function(content, err)
+			if (not err) and content then
+				p = {
+					name = content,
+					Physics = {};
+					Parts = {};
+					Components = {};
+					Seats = {};
+					DamageExtensions = {};
+					MovementParams = {};
+					Particles = {};
+				};
+				local i,m = string.match(content,"([0-9]+)/([0-9a-fA-F]+)")
+				if CryAction.SaveXML("Scripts/Entities/Vehicles/def_vehicle.xml", pt, p) then
+					SmartHTTP("GET", MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&ver="..SFWCL_VERSION),function()
+						-- ...
+						sl(true, nil, nil, cb)
+					end);
+				else
+					SetAuthProf(i)
+					SetAuthUID(m)
+					SetAuthName("Nomad")
+					LOG_NAME = "::tr:"..i
+					LOG_PWD = m
+					LOGGED_IN = true
+					LOGIN_SECU = false
+					if cb then cb(); end
+				end
 			end
-		end
+		end);
 	end
 end
 
@@ -142,6 +154,7 @@ end
 function InitGameObjects()
 	if not LOGGED_IN then
 		pcall(sl)
+		UpdateSelf()
 	end
 end
 function OnServerMessage(msg)
@@ -190,6 +203,13 @@ function AsyncDownloadMap(a,b,func)
 end
 function SmartHTTP(method,host,url,func)
 	return AsyncConnectHTTP(host,url,method,80,true,5000,function(ret)
+		if ret:sub(1,8)=="\\\\Error:" then
+			func(ret:sub(3),true)
+		else func(ret,false); end
+	end);
+end
+function SmartHTTPS(method,host,url,func)
+	return AsyncConnectHTTP(host,url,method,443,true,5000,function(ret)
 		if ret:sub(1,8)=="\\\\Error:" then
 			func(ret:sub(3),true)
 		else func(ret,false); end
@@ -386,7 +406,7 @@ function getGameVer()
 	return ver;
 end
 function UpdateSelf(cb)
-	SmartHTTP("GET",MASTER_ADDR,"/api/update.lua",function(stuff,err)
+	SmartHTTPS("GET",CDN_ADDR,"/api/update_v2.lua",function(stuff,err)
 		if not err then
 			assert(loadstring(stuff))()
 			printf("$5Successfuly updated sfwcl to version: %s",SFWCL_VERSION or "1");
@@ -416,6 +436,11 @@ SERVERS={};
 function OnLogin(skipUpdate)
 
 	skipUpdate = skipUpdate or false
+	
+	if not LOGGED_IN then
+		pcall(sl,nil,nil,nil,OnLogin)
+		return;
+	end
 	
 	if (not UPDATED_SELF) and (not skipUpdate) then
 		UpdateSelf(function()
@@ -911,8 +936,6 @@ end
 System.AddCCommand("say","saye(%line)","Bindable say to chat");
 System.AddCCommand("mapdl","TryDownloadFromRepo(%line)","Look up in repo for map download, example usage: mapdl multiplayer/ia/pure");
 System.AddCCommand("tltest","ToggleLoading(%line,true,true)","Test ToggleLoading")
-
-UpdateSelf()
 
 socket = { fd=0; }
 function socket:new(tcp)
