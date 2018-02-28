@@ -92,22 +92,24 @@ typedef void(__cdecl *PFNCANCELDOWNLOAD)();
 #define OLD_MSVC_DETECTED  // almost no C++11 support
 #endif
 
+#include <string>
+
 void ToggleLoading(const char *text, bool loading = true, bool reset = true);
 
-void* trampoline(void *oldfn, void *newfn, int sz, int bits = ARCH_BITS);
 #define hookp trampoline
-int getGameVer(const char*);
+void* trampoline(void *oldfn, void *newfn, int sz, int bits = ARCH_BITS);
 void hook(void *src,void *dest);
 void unhook(void *src);
-#include <string>
+
+int getGameVer(const char*);
 std::string fastDownload(const char *url);
 bool autoUpdateClient();
 
-std::string signMemory(void *addr, int len, const char *nonce, bool raw=false);
-std::string signFile(const char *name, const char *nonce, bool raw=false);
-int decryptFile(const char *name, char **out);
+std::string SignMemory(void *addr, int len, const char *nonce, bool raw=false);
+std::string SignFile(const char *name, const char *nonce, bool raw=false);
+int FileDecrypt(const char *name, char **out);
 #ifdef PRERELEASE_BUILD
-void encryptFile(const char *name, const char *out);
+void FileEncrypt(const char *name, const char *out);
 #endif
 
 #ifdef OFFICIAL_BUILD

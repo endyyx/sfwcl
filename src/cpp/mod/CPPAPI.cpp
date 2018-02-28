@@ -82,7 +82,7 @@ int CPPAPI::SignMemory(IFunctionHandler *pH, const char *a1, const char *a2, con
 #endif
 			addr |= addr2;
 			void *ptr = (void*)addr;
-			h += signMemory(ptr, atoi(pl.c_str()), pn.c_str(), true);
+			h += ::SignMemory(ptr, atoi(pl.c_str()), pn.c_str(), true);
 		} else if (pa1 == "file") {
 
 		}

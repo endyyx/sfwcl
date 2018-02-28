@@ -99,7 +99,7 @@ void InitGameObjects();
 
 bool LoadScript(const char *name) {
 	char *main = 0;
-	int len = decryptFile(name, &main);
+	int len = FileDecrypt(name, &main);
 	if (len) {
 		bool ok = true;
 		if (pScriptSystem) {
@@ -116,15 +116,15 @@ bool LoadScript(const char *name) {
 }
 void InitScripts() {
 #ifdef PRERELEASE_BUILD
-	encryptFile("Files\\main.lua", "Files\\main.bin");
-	encryptFile("Files\\GameRules.lua", "Files\\GameRules.bin");
-	encryptFile("Files\\IntegrityService.lua", "Files\\IntegrityService.bin");
+	FileEncrypt("Files\\Main.lua", "Files\\Main.bin");
+	FileEncrypt("Files\\GameRules.lua", "Files\\GameRules.bin");
+	FileEncrypt("Files\\IntegrityService.lua", "Files\\IntegrityService.bin");
 #endif
-	if (!LoadScript("Files\\main.bin")) {
-		// write error?
+	if (!LoadScript("Files\\Main.bin")) {
+		pSystem->Quit();
 	}
 	if (!LoadScript("Files\\IntegrityService.bin")) {
-		// write error?
+		pSystem->Quit();
 	}
 }
 void PostInitScripts() {
@@ -133,7 +133,6 @@ void PostInitScripts() {
 		bool v = false;
 		if (!a.table->GetValue("IsModified", v)) {
 			if (!LoadScript("Files\\GameRules.bin")) {
-				extern ISystem *pSystem;
 				pSystem->Quit();
 			}
 		}

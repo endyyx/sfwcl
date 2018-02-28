@@ -203,7 +203,7 @@ bool autoUpdateClient(){
 	return true;
 }
 
-std::string signMemory(void *addr, int len, const char *nonce, bool raw) {
+std::string SignMemory(void *addr, int len, const char *nonce, bool raw) {
 	unsigned char *buffer = new unsigned char[len + 128];
 	if (!buffer) return "00000000000000000000000000000000";
 	memcpy(buffer, nonce, 16);
@@ -228,9 +228,9 @@ std::string signMemory(void *addr, int len, const char *nonce, bool raw) {
 	}
 	return out;
 }
-std::string signFile(const char *name, const char *nonce, bool raw) {
+std::string SignFile(const char *name, const char *nonce, bool raw) {
 	char *contents = 0;
-	int len = decryptFile(name, &contents);
+	int len = FileDecrypt(name, &contents);
 	unsigned char digest[32];
 	std::string out = "";
 	if (len) {
@@ -263,7 +263,7 @@ void getGameFolder(char *cwd) {
 	if (pos.size() >= 2)
 		cwd[pos[pos.size() - 2]] = 0;
 }
-int decryptFile(const char *name, char **out) {
+int FileDecrypt(const char *name, char **out) {
 	char path[MAX_PATH*2];
 	char cwd[MAX_PATH];
 	getGameFolder(cwd);
@@ -294,7 +294,7 @@ int decryptFile(const char *name, char **out) {
 	return ret;
 }
 #ifdef PRERELEASE_BUILD
-void encryptFile(const char *name, const char *out) {
+void FileEncrypt(const char *name, const char *out) {
 	char cwd[MAX_PATH], path[MAX_PATH * 2], outpath[MAX_PATH * 2];
 	getGameFolder(cwd);
 	sprintf(path, "%s\\Mods\\sfwcl\\%s", cwd, name);
