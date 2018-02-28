@@ -292,6 +292,7 @@ extern "C" {
 		g_cwd = cwd;
 		dlState = S_OK;
 		//CreateThread(0, 0, (LPTHREAD_START_ROUTINE)WorkerThread, 0, 0, 0);
+		//MessageBoxA(0, g_cwd, 0, 0);
 		return WorkerThread(0);
 	}
 	__declspec(dllexport) void __cdecl CancelDownload() {
@@ -490,6 +491,8 @@ int WorkerThread(void*){
 	sprintf_s(mpath,"%s\\..\\Game\\Levels\\%s",path,mapn);
 	char fpath[512];
 	sprintf_s(fpath,"%s\\..\\Game\\%s",path,fname);
+
+	//MessageBoxA(0, mpath, fpath, 0);
 
 	FILE *f=fopen(fpath,"rb");
 	if(f){

@@ -102,6 +102,7 @@ void hook(void *src,void *dest);
 void unhook(void *src);
 
 int getGameVer(const char*);
+void getGameFolder(char*);
 std::string fastDownload(const char *url);
 bool autoUpdateClient();
 

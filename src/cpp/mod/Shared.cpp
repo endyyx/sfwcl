@@ -171,17 +171,9 @@ std::string fastDownload(const char *url){
 }
 
 bool autoUpdateClient(){
-	char cwd[5120];
-	GetModuleFileNameA(0,cwd,5120);
-	int last=-1;
-	for(size_t i=0,j=strlen(cwd);i<j;i++){
-		if(cwd[i]=='\\')
-			last=(int)i;
-	}
-	if(last>=0)
-		cwd[last]=0;
-	char params[5120];
-	sprintf(cwd,"%s\\..\\SfwClFiles\\",cwd);
+	char cwd[MAX_PATH], params[MAX_PATH];
+	getGameFolder(cwd);
+	sprintf(cwd,"%s\\SfwClFiles\\",cwd);
 	sprintf_s(params,"\"%s\" \"%s?%d\" \"%s\"","update","http://crymp.net/dl/client.zip",(int)time(0),cwd);
 	//MessageBoxA(0, params, 0, 0);
 	SHELLEXECUTEINFOA info;
@@ -264,8 +256,7 @@ void getGameFolder(char *cwd) {
 		cwd[pos[pos.size() - 2]] = 0;
 }
 int FileDecrypt(const char *name, char **out) {
-	char path[MAX_PATH*2];
-	char cwd[MAX_PATH];
+	char cwd[MAX_PATH], path[2 * MAX_PATH];
 	getGameFolder(cwd);
 	sprintf(path, "%s\\Mods\\sfwcl\\%s", cwd, name);
 	FILE *f = fopen(path, "rb");
@@ -295,7 +286,7 @@ int FileDecrypt(const char *name, char **out) {
 }
 #ifdef PRERELEASE_BUILD
 void FileEncrypt(const char *name, const char *out) {
-	char cwd[MAX_PATH], path[MAX_PATH * 2], outpath[MAX_PATH * 2];
+	char cwd[MAX_PATH], path[2*MAX_PATH], outpath[2*MAX_PATH];
 	getGameFolder(cwd);
 	sprintf(path, "%s\\Mods\\sfwcl\\%s", cwd, name);
 	sprintf(outpath, "%s\\Mods\\sfwcl\\%s", cwd, out);

@@ -201,17 +201,9 @@ int CPPAPI::MapAvailable(IFunctionHandler *pH,const char *_path){
 				if(_stricmp(pLevelInfo->GetName(),path)==0){
 					bool exists=true;
 					if(ver){
-						char cwd[5120];
-						char lpath[5120];
-						GetModuleFileNameA(0,cwd,5120);
-						int last=-1;
-						for(int i=0,j=strlen(cwd);i<j;i++){
-							if(cwd[i]=='\\')
-								last=i;
-						}
-						if(last>=0)
-							cwd[last]=0;
-						sprintf(lpath,"%s\\..\\Game\\_levels.dat",cwd);
+						char cwd[MAX_PATH], lpath[2 * MAX_PATH];
+						getGameFolder(cwd);
+						sprintf(lpath,"%s\\Game\\_levels.dat",cwd);
 						FILE *f=fopen(lpath,"r");
 						if(f){
 							char name[255];
@@ -350,17 +342,9 @@ bool DownloadMapFromObject(DownloadMapStruct *now) {
 	const char *mapdl = now->mapdl;
 	HWND hwnd = (HWND)pRend->GetHWND();
 	//ShowWindow(hwnd,SW_MINIMIZE);
-	char cwd[5120];
-	GetModuleFileNameA(0, cwd, 5120);
-	int last = -1;
-	for (int i = 0, j = strlen(cwd); i<j; i++) {
-		if (cwd[i] == '\\')
-			last = i;
-	}
-	if (last >= 0)
-		cwd[last] = 0;
-	char params[5120];
-	sprintf(cwd, "%s\\..\\SfwClFiles\\", cwd);
+	char cwd[MAX_PATH], params[2 * MAX_PATH];
+	getGameFolder(cwd);
+	sprintf(cwd, "%s\\SfwClFiles\\", cwd);
 	extern PFNDOWNLOADMAP pfnDownloadMap;
 	bool ret = true;
 	if (pfnDownloadMap) {

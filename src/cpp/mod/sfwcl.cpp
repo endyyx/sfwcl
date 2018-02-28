@@ -393,20 +393,11 @@ bool TestFileWrite(const char *path) {
 	return false;
 }
 bool TestGameFilesWritable() {
-	char cwd[5120];
-	GetModuleFileNameA(0, cwd, 5120);
-	int last = -1;
-	for (int i = 0, j = strlen(cwd); i<j; i++) {
-		if (cwd[i] == '\\')
-			last = i;
-	}
-	if (last >= 0)
-		cwd[last] = 0;
-	char params[5120];
-	char gameDir[5120];
-	sprintf(gameDir, "%s\\..\\Game\\Levels\\_write.dat", cwd);
+	char cwd[MAX_PATH], params[2 * MAX_PATH], gameDir[2 * MAX_PATH];
+	getGameFolder(cwd);
+	sprintf(gameDir, "%s\\Game\\Levels\\_write.dat", cwd);
 	if (TestFileWrite(gameDir)) return true;
-	sprintf(cwd, "%s\\..\\SfwClFiles\\", cwd);
+	sprintf(cwd, "%s\\SfwClFiles\\", cwd);
 	SHELLEXECUTEINFOA info;
 	ZeroMemory(&info, sizeof(SHELLEXECUTEINFOA));
 	info.lpDirectory = cwd;
