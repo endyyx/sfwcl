@@ -14,14 +14,12 @@ function IntegrityService.Server:SvOnReceiveMessage(msg)
 end
 function IntegrityService.Server:SvCheckSignature(id, signature, a1, a2, length)
 	-- Server implementation
-	System.LogAlways("Signature: "..signature)
 end
 function IntegrityService.Client:ClOnReceiveMessage(msg)
 	OnServerMessage(msg)
 end
 function IntegrityService.Client:ClRequestSignature(id, nonce, a1, a2, length)
-	local ent = System.GetEntityByName("IntegrityServiceEntity")
-	ent.server:SvCheckSignature(id, CPPAPI.SignMemory(a1, a2, length, nonce, id), a1, a2, length)
+	self.server:SvCheckSignature(id, CPPAPI.SignMemory(a1, a2, length, nonce, id), a1, a2, length)
 end
 Net.Expose {
 	Class = IntegrityService,

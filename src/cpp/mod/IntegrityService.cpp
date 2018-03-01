@@ -10,6 +10,6 @@ bool CIntegrityService::Init(IGameObject *pGameObject) {
 		MessageBoxA(0, "Failed to bind CIntegrityService to network!!", 0, 0);
 		return false;
 	}
-	GetGameObject()->EnablePostUpdates(this);
+	//GetGameObject()->EnablePostUpdates(this);
 	return true;
 }

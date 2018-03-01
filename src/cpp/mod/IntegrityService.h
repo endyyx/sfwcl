@@ -18,7 +18,7 @@ struct CIntegrityService :
 
 	virtual void InitClient(int channelId) {}
 	virtual void PostInit(IGameObject *pGameObject) {
-		GetGameObject()->EnableUpdateSlot(this, 0);
+		//GetGameObject()->EnableUpdateSlot(this, 0);
 	}
 	virtual void PostInitClient(int channelId) {
 		//...
@@ -30,8 +30,8 @@ struct CIntegrityService :
 		return true;
 	}
 	virtual void FullSerialize(TSerialize ser) {
-		bool en = true;
-		ser.Value("enabled", en, 'bool');
+		//bool en = true;
+		//ser.Value("enabled", en, 'bool');
 	}
 	virtual void PostSerialize() {}
 	virtual void SerializeSpawnInfo(TSerialize ser) {}
