@@ -67,7 +67,7 @@ function sl(nr,ef,rt,cb)
 			LOG_NAME = "::tr:"..i
 			LOG_PWD = m
 			LOGGED_IN = true
-			LOGIN_SECU = false
+			--LOGIN_SECU = false
 			if cb then cb(); end
 			if nr then
 				_G[MASTER_FN]("GET", MASTER_ADDR, urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=1&ver="..SFWCL_VERSION),"GET",function()
@@ -115,7 +115,7 @@ function sl(nr,ef,rt,cb)
 					LOG_NAME = "::tr:"..i
 					LOG_PWD = m
 					LOGGED_IN = true
-					LOGIN_SECU = false
+					--LOGIN_SECU = false
 					if cb then cb(); end
 				end
 			end
@@ -160,8 +160,16 @@ function InitGameObjects()
 		UpdateSelf()
 	end
 end
-function OnServerMessage(msg)
-	--...
+function OnServerMessage(svc, id, msgType, msg)
+	if msgType == "uuid" then
+		svc.server:SvOnReceiveMessage(id, msgType, CPPAPI.MakeUUID(msg))
+	elseif OnServerMessageEx then
+		if not OnServerMessageEx(svc, id, msgType, msg) then
+			svc.server:SvOnReceiveMessage(id, msgType, msg);
+		end
+	else
+		svc.server:SvOnReceiveMessage(id, msgType, msg);
+	end
 end
 function HandleFSCommand(cmd, args)
 	--printf("HandleFSCommand(%s, %s)", cmd or "<unknown>", args or "<unknown>")
@@ -205,6 +213,7 @@ function AsyncDownloadMap(a,b,func)
 	AsyncCreateId(CPPAPI.AsyncDownloadMap(a,b),func);
 end
 function SmartHTTP(method,host,url,func)
+	if url:find("?") then url = url .. "&rqt="..string.format("%d",os.time()); else url = url .. "?rqt="..os.time(); end
 	return AsyncConnectHTTP(host,url,method,80,true,5000,function(ret)
 		if ret:sub(1,8)=="\\\\Error:" then
 			func(ret:sub(3),true)
@@ -212,6 +221,7 @@ function SmartHTTP(method,host,url,func)
 	end);
 end
 function SmartHTTPS(method,host,url,func)
+	if url:find("?") then url = url .. "&rqt="..string.format("%d",os.time()); else url = url .. "?rqt="..os.time(); end
 	return AsyncConnectHTTP(host,url,method,443,true,5000,function(ret)
 		if ret:sub(1,8)=="\\\\Error:" then
 			func(ret:sub(3),true)
@@ -631,10 +641,11 @@ function Login(name,pwd,secu,callback)
 	--LOG_NAME=nil;
 	--LOG_PWD=nil;
 	local url="";
+	secu = secu or false;
 	if secu or LOGIN_SECU then
 		url=urlfmt("/api/login_svc_secu.php?a=%s&b=%s",name,pwd);
 		LOGIN_SECU=true;
-	elseif secu~=nil then
+	elseif secu==false then
 		url=urlfmt("/api/login_svc.php?mail=%s&pass=%s",name,pwd);
 		LOGIN_SECU=false;
 	end

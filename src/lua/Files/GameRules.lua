@@ -15,14 +15,6 @@ end
 
 IntegrityUpdate();
 
-function SfwclTest()
-	if CryAction.IsServer() then
-		RequestSignature(1, "$1", "0o5/oKaAWzKmgIJ2 BzOUBK3NNcD7d3Eb wxd6E9jWbK2qhXCA", "0 0 0", "39076A88 391CD151 3919CF3F", "37 33 36")
-	else
-		SendMessage("Hello world")
-	end
-end
-
 function printf(fmt,...)
 	System.LogAlways(string.format(fmt,...));
 end
@@ -106,7 +98,6 @@ LinkToRules("OnUpdate");
 System.AddCCommand("garbage",[[
 	System.LogAlways(string.format(">>Garbage removed totally: %.3f MB, average: %.3f MB",TOTALREMOVED/1024,(TOTALREMOVED/1024)/TIMESREMOVED));
 ]],"Info about garbage");
-System.AddCCommand("sfwcl_test", "SfwclTest()","test")
 
 if OnGameRulesLoadCallback then
 	OnGameRulesLoadCallback()

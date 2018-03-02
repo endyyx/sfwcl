@@ -58,7 +58,33 @@ void CPPAPI::RegisterMethods(){
 	SCRIPT_REG_TEMPLFUNC(AsyncDownloadMap, "mapn, mapdl");
 	SCRIPT_REG_TEMPLFUNC(ToggleLoading, "text, loading, reset");
 	SCRIPT_REG_TEMPLFUNC(CancelDownload, "");
+	SCRIPT_REG_TEMPLFUNC(MakeUUID, "salt");
+	SCRIPT_REG_TEMPLFUNC(SHA256, "text");
 	SCRIPT_REG_TEMPLFUNC(SignMemory, "addr1, addr2, nonce, len, id");
+}
+int CPPAPI::SHA256(IFunctionHandler *pH, const char *text) {
+	unsigned char digest[32];
+	char hash[80];
+	sha256((const unsigned char*)text, strlen(text), digest);
+	for (int i = 0; i < 32; i++) {
+		sprintf(hash + i * 2, "%02X", digest[i] & 255);
+	}
+	return pH->EndFunction(hash);
+}
+int CPPAPI::MakeUUID(IFunctionHandler *pH, const char *salt) {
+	const char *hwid = "Intel";
+	char pool[256];
+	unsigned char digest[32];
+	strcpy(pool, hwid);
+	strcpy(pool, salt);
+	sha256((const unsigned char*)pool, strlen(pool), digest);
+	strcpy(pool, hwid);
+	strcat(pool, ":");
+	int len = strlen(pool);
+	for (int i = 0; i < 32; i++) {
+		sprintf(pool + len + i * 2, "%02X", digest[i] & 255);
+	}
+	return pH->EndFunction(pool);
 }
 int CPPAPI::SignMemory(IFunctionHandler *pH, const char *a1, const char *a2, const char *len, const char *nonce, const char *id) {
 	std::stringstream a1s, a2s, ls, ns;
