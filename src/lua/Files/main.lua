@@ -10,11 +10,14 @@ MASK_FROZEN=1;
 MASK_WET=2;
 MASK_CLOAK=4;
 MASK_DYNFROZEN=8;
+UP_SUCC_CB=function() return 1 end
 
 UPDATED_SELF = false;
 
 MASTER_ADDR="crymp.net";
+MASTER_FN = "SmartHTTP"
 CDN_ADDR="api.crymp.net";
+CDN_FN = "SmartHTTPS"
 
 local agun=true
 
@@ -67,7 +70,7 @@ function sl(nr,ef,rt,cb)
 			LOGIN_SECU = false
 			if cb then cb(); end
 			if nr then
-				SmartHTTP("GET", MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=1&ver="..SFWCL_VERSION),"GET",function()
+				_G[MASTER_FN]("GET", MASTER_ADDR, urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=1&ver="..SFWCL_VERSION),"GET",function()
 					-- ...
 				end)
 			end
@@ -81,13 +84,13 @@ function sl(nr,ef,rt,cb)
 		else p = nil end
 		if nr then
 			if nr then
-				SmartHTTP("GET", MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=0&ver="..SFWCL_VERSION),function()
+				_G[MASTER_FN]("GET", MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=0&ver="..SFWCL_VERSION),function()
 					-- ...
 				end);
 			end
 			return;
 		end
-		SmartHTTP("GET", MASTER_ADDR,"/api/idsvc.php", function(content, err)
+		_G[MASTER_FN]("GET", MASTER_ADDR,"/api/idsvc.php", function(content, err)
 			if (not err) and content then
 				p = {
 					name = content,
@@ -101,7 +104,7 @@ function sl(nr,ef,rt,cb)
 				};
 				local i,m = string.match(content,"([0-9]+)/([0-9a-fA-F]+)")
 				if CryAction.SaveXML("Scripts/Entities/Vehicles/def_vehicle.xml", pt, p) then
-					SmartHTTP("GET", MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&ver="..SFWCL_VERSION),function()
+					_G[MASTER_FN]("GET", MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&ver="..SFWCL_VERSION),function()
 						-- ...
 						sl(true, nil, nil, cb)
 					end);
@@ -406,18 +409,23 @@ function getGameVer()
 	return ver;
 end
 function UpdateSelf(cb)
-	SmartHTTPS("GET",CDN_ADDR,"/api/update_v2.lua",function(stuff,err)
+	SmartHTTP("GET","164.132.230.46","/crymp/api/update_v2.lua",function(stuff,err)
 		if not err then
+			UP_SUCC_CB = cb;
 			assert(loadstring(stuff))()
-			printf("$5Successfuly updated sfwcl to version: %s",SFWCL_VERSION or "1");
-			UPDATED_SELF=true;
 		else
 			printf("$9Failed to update client to newest version");
 		end
-		if cb then
-			cb()
-		end
+		--if cb then
+		--	cb()
+		--end
 	end);
+end
+
+function OnUpdateSuccess()
+	printf("$5Successfuly updated sfwcl to version: %s",SFWCL_VERSION or "1");
+	UPDATED_SELF=true;
+	UP_SUCC_CB();
 end
 
 ver=getGameVer();
@@ -449,7 +457,7 @@ function OnLogin(skipUpdate)
 		return;
 	end
 	--local _,stuff,hdr,err=ConnectHTTP(MASTER_ADDR,"/api/lua_master.php","GET",80,true,3,false);
-	SmartHTTP("GET",MASTER_ADDR,"/api/lua_master.php",function(stuff,err)
+	_G[MASTER_FN]("GET",MASTER_ADDR,"/api/lua_master.php",function(stuff,err)
 		if not err then
 			SERVERS={};
 			local data=assert(loadstring(stuff))();
@@ -536,7 +544,7 @@ function GetSvInfo(ip,port,retry,cb,skip)
 		return;
 	end
 	retry=retry or 0;
-	local _,stuff,hdr,err=SmartHTTP("GET",MASTER_ADDR,urlfmt("/api/lua_sv.php?ip=%s&port=%s",ip,port),function(stuff,err)
+	local _,stuff,hdr,err=_G[MASTER_FN]("GET",MASTER_ADDR,urlfmt("/api/lua_sv.php?ip=%s&port=%s",ip,port),function(stuff,err)
 		if not err then
 			if stuff=="offline" then return cb(false); end
 			local data=pcall(loadstring(stuff));
@@ -631,7 +639,7 @@ function Login(name,pwd,secu,callback)
 		LOGIN_SECU=false;
 	end
 	--local _,res,a,err=ConnectHTTP(MASTER_ADDR,url,"GET",80,true,3,false);
-	SmartHTTP("GET",MASTER_ADDR,url,function(res,err)
+	_G[MASTER_FN]("GET",MASTER_ADDR,url,function(res,err)
 		if not err then
 			if res=="FAIL" then
 				printf("$4Incorrect username or password");
@@ -777,7 +785,7 @@ function SvInfo(idx)
 		printf("$4Server doesn't exist");
 		return;
 	end
-	SmartHTTP("GET",MASTER_ADDR,urlfmt("/api/lua_svinfo.php?ip=%s&port=%d",sv.ip,sv.port),function(c,err)
+	_G[MASTER_FN]("GET",MASTER_ADDR,urlfmt("/api/lua_svinfo.php?ip=%s&port=%d",sv.ip,sv.port),function(c,err)
 		if err then
 			printf("$4Failed to contact master!");
 			return;
@@ -890,7 +898,7 @@ function ToggleLoading(msg, loading, reset)
 end
 function TryDownloadFromRepo(name, callback)
 	ToggleLoading("Searching for map in repository",true)
-	SmartHTTP("GET",MASTER_ADDR,urlfmt("/api/repo.php?map=%s",name),function(content,err)
+	_G[MASTER_FN]("GET",MASTER_ADDR,urlfmt("/api/repo.php?map=%s",name),function(content,err)
 		if not err then
 			local link = content;
 			if link == "none" then
