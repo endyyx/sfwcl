@@ -710,6 +710,7 @@ function Join(...)
 	if id==-1 then
 		ip = pwd;
 		port = ex;
+		pwd = nil;
 		ToggleLoading("Connecting "..ip..":"..port,true)
 	else
 		ip,port=SERVERS[id].ip,SERVERS[id].port;

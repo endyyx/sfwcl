@@ -228,9 +228,17 @@ bool __fastcall GetSelectedServer(void *self, void *addr, SServerInfo& server) {
 			port &= 0xFFFF;
 		}
 		else if (GAME_VER == 5767) {
-			ip = getField(int, &server, 0x30);
-			port = (int)getField(unsigned short, &server, 0x34);
+			unsigned char b = getField(unsigned char, &server, 0x38);
+			int off1 = 0x80;
+			int off2 = 0x84;
+			if (b != 0xFE) {
+				off1 += 0x40;
+				off2 += 0x40;
+			}
+			ip = getField(int, &server, off1);
+			port = (int)getField(unsigned short, &server, off2);
 			port &= 0xFFFF;
+			//MemScan(&server, 0x100);
 		}
 #else
 		if (GAME_VER == 5767) {
@@ -440,6 +448,9 @@ extern "C" {
 
 				pGetSelectedServer=(PFNGSS)0x39313C40;
 				hook((void*)pGetSelectedServer,(void*)GetSelectedServer);
+
+
+				pGameUpdate = (PFNGU)hookp((void*)0x390B8A40, (void*)GameUpdate, 15);
 
 				break;
 			case 6156:
