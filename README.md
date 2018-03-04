@@ -18,7 +18,6 @@ Other useful tools:
 
 #### Preparation:
 - Install CMake
-- Install 7-zip (optional, used for creating .pak file)
 - Download source code from this GitHub repository and unpack it somewhere
 - Create empty build directory
 - Create another one if you want to build 64-bit version too (only 64-bit DLLs are needed)
@@ -55,19 +54,17 @@ Crysis/
 ├── Bin64/
 ├── Game/
 ├── ...
-├── Mods/
-│   └── sfwcl/
-│       ├── Bin32/ (32-bit binaries)
-│       │   ├── sfwcl.dll
-│       │   └── mapdl.dll
-│       ├── Bin64/ (64-bit binaries)
-│       │   ├── sfwcl.dll
-│       │   └── mapdl.dll
-│       └── Game/
-│           └── sfwcl.pak
-└── SfwClFiles/ (use either 32-bit or 64-bit binaries here)
-    ├── MapDownloader.exe
-    ├── SafeWritingClient.exe (used for joining server from web page)
-    └── sfwcl_precheck.exe
+└── Mods/
+    └── sfwcl/
+        ├── Bin32/ (32-bit binaries)
+        │   ├── sfwcl.dll
+        │   └── mapdl.dll
+        ├── Bin64/ (64-bit binaries)
+        │   ├── sfwcl.dll
+        │   └── mapdl.dll
+        └── Files/
+            ├── GameRules.lua
+            ├── IntegrityService.lua
+            └── main.lua
 ~~~~
 - create `Crysis.exe` shortcut and add `-mod sfwcl` parameter
