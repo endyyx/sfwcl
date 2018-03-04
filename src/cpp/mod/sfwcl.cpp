@@ -225,15 +225,18 @@ bool __fastcall GetSelectedServer(void *self, void *addr, SServerInfo& server) {
 			}
 			ip = getField(int, &server, off1);
 			port = (int)getField(unsigned short, &server, off2);
+			port &= 0xFFFF;
 		}
 		else if (GAME_VER == 5767) {
 			ip = getField(int, &server, 0x30);
 			port = (int)getField(unsigned short, &server, 0x34);
+			port &= 0xFFFF;
 		}
 #else
 		if (GAME_VER == 5767) {
 			ip = (int)getField(int, &server, 0x14);
 			port = (int)getField(int, &server, 0x18);
+			port &= 0xFFFF;
 		}
 #endif
 		sprintf(sz_ip, "%d.%d.%d.%d", (ip) & 0xFF, (ip >> 8) & 0xFF, (ip >> 16) & 0xFF, (ip >> 24) & 0xFF);
@@ -481,6 +484,8 @@ extern "C" {
 
 				pGetSelectedServer=(PFNGSS)0x3922E650;
 				hook((void*)pGetSelectedServer,(void*)GetSelectedServer);
+
+				pGameUpdate = (PFNGU)hookp((void*)0x390B3EB0, (void*)GameUpdate, 7);
 
 				break;
 			case 6156:
