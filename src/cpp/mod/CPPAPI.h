@@ -35,6 +35,7 @@ public:
 	int ToggleLoading(IFunctionHandler *pH, const char *text, bool loading = true, bool reset = true);
 	int MakeUUID(IFunctionHandler *pH, const char *salt);
 	int SHA256(IFunctionHandler *pH, const char *text);
+	int GetLocaleInformation(IFunctionHandler *pH);
 	int SignMemory(IFunctionHandler *pH, const char *addr1, const char *addr2, const char* len, const char *nonce, const char *id);
 	//int ClearLayer(IFunctionHandler* pH,int layer);
 protected:

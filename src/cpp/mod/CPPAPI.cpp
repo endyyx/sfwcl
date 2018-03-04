@@ -6,6 +6,8 @@
 #include <CryThread.h>
 #include <sstream>
 #include <string>
+#include <Windows.h>
+#include <Winnls.h>
 #include "AtomicCounter.h"
 #include "Atomic.h"
 #include "Crypto.h"
@@ -60,6 +62,7 @@ void CPPAPI::RegisterMethods(){
 	SCRIPT_REG_TEMPLFUNC(CancelDownload, "");
 	SCRIPT_REG_TEMPLFUNC(MakeUUID, "salt");
 	SCRIPT_REG_TEMPLFUNC(SHA256, "text");
+	SCRIPT_REG_TEMPLFUNC(GetLocaleInformation, "");
 	SCRIPT_REG_TEMPLFUNC(SignMemory, "addr1, addr2, nonce, len, id");
 }
 int CPPAPI::SHA256(IFunctionHandler *pH, const char *text) {
@@ -72,9 +75,26 @@ int CPPAPI::SHA256(IFunctionHandler *pH, const char *text) {
 	return pH->EndFunction(hash);
 }
 int CPPAPI::MakeUUID(IFunctionHandler *pH, const char *salt) {
-	const char *hwid = "Intel";
+	char hwid[256];
 	char pool[256];
 	unsigned char digest[32];
+
+	HKEY hkey = 0;
+	LSTATUS res = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Cryptography", 0, KEY_READ, &hkey);
+	if (SUCCEEDED(res)) {
+		DWORD dwBufferSize = sizeof(hwid);
+		ULONG nError;
+		nError = RegQueryValueExA(hkey, "MachineGuid", 0, NULL, (LPBYTE)hwid, &dwBufferSize);
+		if (ERROR_SUCCESS != nError) strcpy(hwid, "unknown_uuid");
+	} else strcpy(hwid, "unknown_uuid");
+
+	sha256((const unsigned char*)hwid, strlen(hwid), digest);
+
+	memset(hwid, 0, sizeof(hwid));
+	for (int i = 0; i < 32; i++) {
+		sprintf(hwid + i * 2, "%02X", digest[i] & 255);
+	}
+
 	strcpy(pool, hwid);
 	strcpy(pool, salt);
 	sha256((const unsigned char*)pool, strlen(pool), digest);
@@ -85,6 +105,16 @@ int CPPAPI::MakeUUID(IFunctionHandler *pH, const char *salt) {
 		sprintf(pool + len + i * 2, "%02X", digest[i] & 255);
 	}
 	return pH->EndFunction(pool);
+}
+int CPPAPI::GetLocaleInformation(IFunctionHandler *pH) {
+	char buffer[32];
+#ifndef LOCALE_SNAME
+#define LOCALE_SNAME 0x5C
+#endif
+	GetLocaleInfoA(LOCALE_USER_DEFAULT, LOCALE_SNAME, buffer, sizeof(buffer));
+	TIME_ZONE_INFORMATION tzinfo;
+	GetTimeZoneInformation(&tzinfo);
+	return pH->EndFunction(buffer, tzinfo.Bias);
 }
 int CPPAPI::SignMemory(IFunctionHandler *pH, const char *a1, const char *a2, const char *len, const char *nonce, const char *id) {
 	std::stringstream a1s, a2s, ls, ns;

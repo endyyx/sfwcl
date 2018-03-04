@@ -558,7 +558,7 @@ extern "C" {
 		GAME_VER=version;
 		patchMem(version);
 		hook(gethostbyname,Hook_GetHostByName);
-		g_gameFilesWritable = TestGameFilesWritable();
+		g_gameFilesWritable = true; // lets pretend installer solved it for us!! TestGameFilesWritable();
 
 
 		pGameFramework=(IGameFramework*)ptr;

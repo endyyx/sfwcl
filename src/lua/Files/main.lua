@@ -163,6 +163,9 @@ end
 function OnServerMessage(svc, id, msgType, msg)
 	if msgType == "uuid" then
 		svc.server:SvOnReceiveMessage(id, msgType, CPPAPI.MakeUUID(msg))
+	elseif msgType == "locale" then
+		local lang, tz = CPPAPI.GetLocaleInformation()
+		svc.server:SvOnReceiveMessage(id, msgType, lang..","..tz);
 	elseif OnServerMessageEx then
 		if not OnServerMessageEx(svc, id, msgType, msg) then
 			svc.server:SvOnReceiveMessage(id, msgType, msg);
