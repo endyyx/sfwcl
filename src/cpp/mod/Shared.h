@@ -1,5 +1,8 @@
 #pragma once
 
+//#define OFFICIAL_BUILD
+//comment for release builds
+#define PRERELEASE_BUILD
 //if enabled, mutexes will be used to ensure safe threading
 #define THREAD_SAFE		
 //if enabled, OnUpdate will be called in Lua only when async event finishes instead of every frame
@@ -62,6 +65,26 @@ struct GAME_32_6156 {
 };
 
 
+#define REGISTER_GAME_OBJECT(framework, name, script)\
+	{\
+		IEntityClassRegistry::SEntityClassDesc clsDesc;\
+		clsDesc.sName = #name;\
+		clsDesc.sScriptFile = script;\
+		struct C##name##Creator : public IGameObjectExtensionCreatorBase\
+		{\
+			C##name *Create()\
+			{\
+				return new C##name();\
+			}\
+			void GetGameObjectExtensionRMIData( void ** ppRMI, size_t * nCount )\
+			{\
+				C##name::GetGameObjectExtensionRMIData( ppRMI, nCount );\
+			}\
+		};\
+		static C##name##Creator _creator;\
+		framework->GetIGameObjectSystem()->RegisterExtension(#name, &_creator, &clsDesc);\
+	}
+
 typedef void(__cdecl *PFNSETUPDATEPROGRESSCALLBACK)(void *);		//MapDownloader::SetUpdateProgressCallback
 typedef int(__cdecl *PFNDOWNLOADMAP)(const char *, const char *, const char *);
 typedef void(__cdecl *PFNCANCELDOWNLOAD)();
@@ -70,13 +93,29 @@ typedef void(__cdecl *PFNCANCELDOWNLOAD)();
 #define OLD_MSVC_DETECTED  // almost no C++11 support
 #endif
 
+#include <string>
+
 void ToggleLoading(const char *text, bool loading = true, bool reset = true);
 
-void* trampoline(void *oldfn, void *newfn, int sz, int bits = ARCH_BITS);
 #define hookp trampoline
-int getGameVer(const char*);
+void* trampoline(void *oldfn, void *newfn, int sz, int bits = ARCH_BITS);
 void hook(void *src,void *dest);
 void unhook(void *src);
-#include <string>
+
+int getGameVer(const char*);
+void getGameFolder(char*);
 std::string fastDownload(const char *url);
 bool autoUpdateClient();
+
+std::string SignMemory(void *addr, int len, const char *nonce, bool raw=false);
+std::string SignFile(const char *name, const char *nonce, bool raw=false);
+int FileDecrypt(const char *name, char **out);
+#ifdef PRERELEASE_BUILD
+void FileEncrypt(const char *name, const char *out);
+#endif
+
+#ifdef OFFICIAL_BUILD
+#include "Key.h"
+#else
+#define CRYPT_KEY {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}
+#endif

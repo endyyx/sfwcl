@@ -4,14 +4,19 @@
 #include <IVehicleSystem.h>
 #include <IGameObjectSystem.h>
 #include <CryThread.h>
+#include <sstream>
+#include <string>
+#include <Windows.h>
+#include <Winnls.h>
 #include "AtomicCounter.h"
 #include "Atomic.h"
+#include "Crypto.h"
 //#include <mutex>
 //#include <functional>
 
 #pragma region CPPAPI
 
-extern AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
+extern std::list<AsyncData*> asyncQueue;
 extern int asyncQueueIdx;
 extern std::map<std::string, std::string> asyncRetVal;
 extern IScriptSystem *pScriptSystem;
@@ -26,8 +31,6 @@ CPPAPI::CPPAPI(ISystem *pSystem, IGameFramework *pGameFramework)
 		m_pGameFW(pGameFramework)
 {
 	Init(m_pSS, m_pSystem);
-	for(int i=0;i<MAX_ASYNC_QUEUE;i++)
-		asyncQueue[i]=0;
 	gEvent=CreateEvent(0,0,0,0);
 	thread=CreateThread(0,0,(LPTHREAD_START_ROUTINE)AsyncThread,0,0,0);
 	SetGlobalName("CPPAPI");
@@ -57,6 +60,100 @@ void CPPAPI::RegisterMethods(){
 	SCRIPT_REG_TEMPLFUNC(AsyncDownloadMap, "mapn, mapdl");
 	SCRIPT_REG_TEMPLFUNC(ToggleLoading, "text, loading, reset");
 	SCRIPT_REG_TEMPLFUNC(CancelDownload, "");
+	SCRIPT_REG_TEMPLFUNC(MakeUUID, "salt");
+	SCRIPT_REG_TEMPLFUNC(SHA256, "text");
+	SCRIPT_REG_TEMPLFUNC(GetLocaleInformation, "");
+	SCRIPT_REG_TEMPLFUNC(SignMemory, "addr1, addr2, nonce, len, id");
+}
+int CPPAPI::SHA256(IFunctionHandler *pH, const char *text) {
+	unsigned char digest[32];
+	char hash[80];
+	sha256((const unsigned char*)text, strlen(text), digest);
+	for (int i = 0; i < 32; i++) {
+		sprintf(hash + i * 2, "%02X", digest[i] & 255);
+	}
+	return pH->EndFunction(hash);
+}
+int CPPAPI::MakeUUID(IFunctionHandler *pH, const char *salt) {
+	char hwid[256];
+	char pool[256];
+	unsigned char digest[32];
+
+	HKEY hkey = 0;
+	LSTATUS res = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Cryptography", 0, KEY_READ, &hkey);
+	if (SUCCEEDED(res)) {
+		DWORD dwBufferSize = sizeof(hwid);
+		ULONG nError;
+		nError = RegQueryValueExA(hkey, "MachineGuid", 0, NULL, (LPBYTE)hwid, &dwBufferSize);
+		if (ERROR_SUCCESS != nError) strcpy(hwid, "unknown_uuid");
+	} else strcpy(hwid, "unknown_uuid");
+
+	sha256((const unsigned char*)hwid, strlen(hwid), digest);
+
+	memset(hwid, 0, sizeof(hwid));
+	for (int i = 0; i < 32; i++) {
+		sprintf(hwid + i * 2, "%02X", digest[i] & 255);
+	}
+
+	strcpy(pool, hwid);
+	strcpy(pool, salt);
+	sha256((const unsigned char*)pool, strlen(pool), digest);
+	strcpy(pool, hwid);
+	strcat(pool, ":");
+	int len = strlen(pool);
+	for (int i = 0; i < 32; i++) {
+		sprintf(pool + len + i * 2, "%02X", digest[i] & 255);
+	}
+	return pH->EndFunction(pool);
+}
+int CPPAPI::GetLocaleInformation(IFunctionHandler *pH) {
+	char buffer[32];
+#ifndef LOCALE_SNAME
+#define LOCALE_SNAME 0x5C
+#endif
+	GetLocaleInfoA(LOCALE_USER_DEFAULT, LOCALE_SNAME, buffer, sizeof(buffer));
+	TIME_ZONE_INFORMATION tzinfo;
+	GetTimeZoneInformation(&tzinfo);
+	return pH->EndFunction(buffer, tzinfo.Bias);
+}
+int CPPAPI::SignMemory(IFunctionHandler *pH, const char *a1, const char *a2, const char *len, const char *nonce, const char *id) {
+	std::stringstream a1s, a2s, ls, ns;
+	a1s << a1;
+	a2s << a2;
+	ls << len;
+	ns << nonce;
+	std::string pa1, pa2, pl, pn;
+	std::string h = "";
+	while ((a1s >> pa1) && (a2s >> pa2) && (ls >> pl) && (ns >> pn)) {
+		if (isdigit(pa1[0])) {
+			unsigned long addr1 = 0, addr2 = 0;
+			sscanf(pa1.c_str(), "%lx", &addr1);
+			sscanf(pa2.c_str(), "%lx", &addr2);
+#ifdef _WIN64
+			unsigned long long addr = 0;
+			addr |= addr1;
+			addr <<= 32;
+#else
+			unsigned long addr = 0;
+#endif
+			addr |= addr2;
+			void *ptr = (void*)addr;
+			h += ::SignMemory(ptr, atoi(pl.c_str()), pn.c_str(), true);
+		} else if (pa1 == "file" || pa1=="FILE") {
+			if (pa2.find("..") == std::string::npos && pa2.find(".\\") == std::string::npos) {
+				h += SignFile(pa2.c_str(), pn.c_str(), true);
+			}
+		}
+	}
+	std::string hash = "";
+	unsigned char digest[32];
+	sha256((const unsigned char*)h.c_str(), h.size(), digest);
+	for (int i = 0; i < 32; i++) {
+		static char bf[4];
+		sprintf(bf, "%02X", digest[i] & 255);
+		hash += bf;
+	}
+	return pH->EndFunction(hash.c_str());
 }
 int CPPAPI::ToggleLoading(IFunctionHandler *pH, const char *text, bool loading, bool reset) {
 	::ToggleLoading(text, loading, reset);
@@ -162,17 +259,9 @@ int CPPAPI::MapAvailable(IFunctionHandler *pH,const char *_path){
 				if(_stricmp(pLevelInfo->GetName(),path)==0){
 					bool exists=true;
 					if(ver){
-						char cwd[5120];
-						char lpath[5120];
-						GetModuleFileNameA(0,cwd,5120);
-						int last=-1;
-						for(int i=0,j=strlen(cwd);i<j;i++){
-							if(cwd[i]=='\\')
-								last=i;
-						}
-						if(last>=0)
-							cwd[last]=0;
-						sprintf(lpath,"%s\\..\\Game\\_levels.dat",cwd);
+						char cwd[MAX_PATH], lpath[2 * MAX_PATH];
+						getGameFolder(cwd);
+						sprintf(lpath,"%s\\Game\\_levels.dat",cwd);
 						FILE *f=fopen(lpath,"r");
 						if(f){
 							char name[255];
@@ -311,17 +400,9 @@ bool DownloadMapFromObject(DownloadMapStruct *now) {
 	const char *mapdl = now->mapdl;
 	HWND hwnd = (HWND)pRend->GetHWND();
 	//ShowWindow(hwnd,SW_MINIMIZE);
-	char cwd[5120];
-	GetModuleFileNameA(0, cwd, 5120);
-	int last = -1;
-	for (int i = 0, j = strlen(cwd); i<j; i++) {
-		if (cwd[i] == '\\')
-			last = i;
-	}
-	if (last >= 0)
-		cwd[last] = 0;
-	char params[5120];
-	sprintf(cwd, "%s\\..\\SfwClFiles\\", cwd);
+	char cwd[MAX_PATH], params[2 * MAX_PATH];
+	getGameFolder(cwd);
+	sprintf(cwd, "%s\\SfwClFiles\\", cwd);
 	extern PFNDOWNLOADMAP pfnDownloadMap;
 	bool ret = true;
 	if (pfnDownloadMap) {
@@ -406,10 +487,10 @@ static void AsyncThread(){
 	WSAStartup(0x202, &data);
 	while(true){
 		WaitForSingleObject(gEvent,INFINITE);
-		if(asyncQueue){
-			for(int i=0;i<MAX_ASYNC_QUEUE;i++){
+		if(asyncQueue.size()){
+			for (std::list<AsyncData*>::iterator it = asyncQueue.begin(); it != asyncQueue.end();it++) {
 				g_mutex.Lock();
-				AsyncData *obj=asyncQueue[i];
+				AsyncData *obj = *it;
 				if(obj && !obj->finished){
 					obj->executing = true;
 					g_mutex.Unlock();
@@ -428,8 +509,8 @@ static void AsyncThread(){
 	}
 	WSACleanup();
 }
-void GetClosestFreeItem(AsyncData **in,int *out){
-	static AtomicCounter idx(MAX_ASYNC_QUEUE);
+void GetClosestFreeItem(int *out){
+	static AtomicCounter idx(0);
 	*out = idx.increment();
 }
 #pragma endregion

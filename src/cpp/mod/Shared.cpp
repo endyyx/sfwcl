@@ -4,6 +4,10 @@
 #include <map>
 #include <WinInet.h>
 #include <time.h>
+#include <IGameFramework.h>
+#include <ICryPak.h>
+#include "Crypto.h"
+#include "Protect.h"
 //#include <stdint.h>
 
 template <int T> struct StaticBuffer{
@@ -167,17 +171,9 @@ std::string fastDownload(const char *url){
 }
 
 bool autoUpdateClient(){
-	char cwd[5120];
-	GetModuleFileNameA(0,cwd,5120);
-	int last=-1;
-	for(size_t i=0,j=strlen(cwd);i<j;i++){
-		if(cwd[i]=='\\')
-			last=(int)i;
-	}
-	if(last>=0)
-		cwd[last]=0;
-	char params[5120];
-	sprintf(cwd,"%s\\..\\SfwClFiles\\",cwd);
+	char cwd[MAX_PATH], params[MAX_PATH];
+	getGameFolder(cwd);
+	sprintf(cwd,"%s\\SfwClFiles\\",cwd);
 	sprintf_s(params,"\"%s\" \"%s?%d\" \"%s\"","update","http://crymp.net/dl/client.zip",(int)time(0),cwd);
 	//MessageBoxA(0, params, 0, 0);
 	SHELLEXECUTEINFOA info;
@@ -198,3 +194,130 @@ bool autoUpdateClient(){
 	}
 	return true;
 }
+
+std::string SignMemory(void *addr, int len, const char *nonce, bool raw) {
+	unsigned char *buffer = new unsigned char[len + 128];
+	if (!buffer) return "00000000000000000000000000000000";
+	memcpy(buffer, nonce, 16);
+	DWORD flags = 0;
+	if(!VirtualProtect(addr, len + 128, PAGE_EXECUTE_READ, &flags)) return "00000000000000000000000000000000";
+	memcpy(buffer+16, addr, len);
+	VirtualProtect(addr, len + 128, flags, 0);
+	unsigned char digest[32];
+	
+	std::string out = "";
+	sha256(buffer, len + 16, digest);
+	delete[] buffer;
+	if (raw) {
+		for(int i=0;i<32;i++)
+			out += digest[i];
+		return out;
+	}
+	for (int i = 0; i < 32; i++) {
+		static char bf[4];
+		sprintf(bf, "%02X", digest[i] & 255);
+		out += bf;
+	}
+	return out;
+}
+std::string SignFile(const char *name, const char *nonce, bool raw) {
+	char *contents = 0;
+	int len = FileDecrypt(name, &contents);
+	unsigned char digest[32];
+	std::string out = "";
+	if (len) {
+		memcpy(contents + len, nonce, 16);
+		sha256((unsigned char*)contents, len + 16, digest);
+		if (raw) {
+			for (int i = 0; i<32; i++)
+				out += digest[i];
+		} else {
+			for (int i = 0; i < 32; i++) {
+				static char bf[4];
+				sprintf(bf, "%02X", digest[i] & 255);
+				out += bf;
+			}
+		}
+		for (int i = 0; i < len; i++) {
+			contents[i] = rand() & 0xFF;
+		}
+		delete[] contents;
+	}
+	return out;
+}
+void getGameFolder(char *cwd) {
+	GetModuleFileNameA(0, cwd, MAX_PATH);
+	std::vector<int> pos;
+	for (int i = 0, j = strlen(cwd); i < j; i++) {
+		if (cwd[i] == '\\')
+			pos.push_back(i);
+	}
+	if (pos.size() >= 2)
+		cwd[pos[pos.size() - 2]] = 0;
+}
+int FileDecrypt(const char *name, char **out) {
+	char cwd[MAX_PATH], path[2 * MAX_PATH];
+	getGameFolder(cwd);
+	sprintf(path, "%s\\Mods\\sfwcl\\%s", cwd, name);
+	FILE *f = fopen(path, "rb");
+	int ret = 0;
+	if (f) {
+
+		fseek(f, 0, SEEK_END);
+		long len = ftell(f);
+		fseek(f, 0, SEEK_SET);
+		unsigned char *mem = new unsigned char[len * 2 + 64];
+		memset(mem, 0, len * 2 + 64);
+		fread(mem, 1, len, f);
+		fclose(f);
+		if (mem[0] == 0) {
+			AES_ctx ctx; memset(&ctx, 0, sizeof(ctx));
+			uint8_t key[] = CRYPT_KEY;
+			AES_init_ctx_iv(&ctx, key, (uint8_t*)mem + 1);
+			AES_CBC_decrypt_buffer(&ctx, mem + 17, len - 17);
+			memcpy(mem, mem + 17, len - 17);
+			*out = (char*)mem;
+		}
+		else *out = (char*)mem;
+		ret = strlen(*out);
+	} else *out = 0;
+
+	return ret;
+}
+#ifdef PRERELEASE_BUILD
+void FileEncrypt(const char *name, const char *out) {
+	char cwd[MAX_PATH], path[2*MAX_PATH], outpath[2*MAX_PATH];
+	getGameFolder(cwd);
+	sprintf(path, "%s\\Mods\\sfwcl\\%s", cwd, name);
+	sprintf(outpath, "%s\\Mods\\sfwcl\\%s", cwd, out);
+	//MessageBoxA(0, path, outpath, 0);
+	FILE *f = fopen(path, "rb");
+	if (f) {
+		fseek(f, 0, SEEK_END);
+		long len = ftell(f);
+		fseek(f, 0, SEEK_SET);
+		unsigned char *mem = new unsigned char[len * 2];
+		int remaining = 16 - (len) % 16;
+		memset(mem, remaining, len * 2);
+
+		fread(mem, 1, len, f);
+		mem[len] = 0;
+		fclose(f);
+		unsigned char iv[16];
+		for (int i = 0; i < 16; i++) {
+			iv[i] = rand() & 255;
+		}
+		if (mem[0] != 0) {
+			AES_ctx ctx; memset(&ctx, 0, sizeof(ctx));
+			uint8_t key[] = CRYPT_KEY;
+			AES_init_ctx_iv(&ctx, key, iv);
+			AES_CBC_encrypt_buffer(&ctx, mem, len + remaining);
+			f = fopen(outpath, "wb");
+			fputc(0, f);
+			fwrite(iv, 1, 16, f);
+			fwrite(mem, 1, len + remaining, f);
+			fclose(f);
+		}
+	}
+}
+#endif

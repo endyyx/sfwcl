@@ -1,5 +1,2 @@
 lib/* linguist-vendored
 src/cpp/mod/CryEngine/* linguist-vendored
-src/lua/Scripts/GameRules/InstantAction100.lua linguist-vendored
-src/lua/Scripts/GameRules/InstantAction121.lua linguist-vendored
-src/lua/Scripts/GameRules/InstantAction150.lua linguist-vendored

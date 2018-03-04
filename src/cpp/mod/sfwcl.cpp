@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <sstream>
 #include "Mutex.h"
+#include "Protect.h"
 //#include <mutex>
 
 #define CLIENT_BUILD 1001
@@ -20,6 +21,7 @@
 #include <IScriptSystem.h>
 #include <IConsole.h>
 #include <I3DEngine.h>
+#include <IGameRulesSystem.h>
 #include <IFont.h>
 #include <IUIDraw.h>
 #include <IFlashPlayer.h>
@@ -28,6 +30,7 @@
 #include "CPPAPI.h"
 #include "Socket.h"
 #include "Structs.h"
+#include "IntegrityService.h"
 #include "Atomic.h"
 
 CPPAPI *luaApi=0;
@@ -39,7 +42,8 @@ IGame *pGame = 0;
 IScriptSystem *pScriptSystem=0;
 IGameFramework *pGameFramework=0;
 IFlashPlayer *pFlashPlayer=0;
-AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
+//AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
+std::list<AsyncData*> asyncQueue;
 Atomic<const char*> mapDlMessage(0);
 std::map<std::string, std::string> asyncRetVal;
 int asyncQueueIdx = 0;
@@ -89,6 +93,50 @@ void MemScan(void *base, int size);
 
 void __stdcall MapDownloadUpdateProgress(const char *msg, bool error) {
 	mapDlMessage.set(msg);
+}
+
+void InitGameObjects();
+
+bool LoadScript(const char *name) {
+	char *main = 0;
+	int len = FileDecrypt(name, &main);
+	if (len) {
+		bool ok = true;
+		if (pScriptSystem) {
+			if (!pScriptSystem->ExecuteBuffer(main, len)) {
+				ok = false;
+			}
+		}
+		for (int i = 0; i < len; i++) main[i] = 0;
+		delete[] main;
+		main = 0;
+		return ok;
+	}
+	return false;
+}
+void InitScripts() {
+#ifdef PRERELEASE_BUILD
+	FileEncrypt("Files\\Main.lua", "Files\\Main.bin");
+	FileEncrypt("Files\\GameRules.lua", "Files\\GameRules.bin");
+	FileEncrypt("Files\\IntegrityService.lua", "Files\\IntegrityService.bin");
+#endif
+	if (!LoadScript("Files\\Main.bin")) {
+		//pSystem->Quit();
+	}
+	if (!LoadScript("Files\\IntegrityService.bin")) {
+		//pSystem->Quit();
+	}
+}
+void PostInitScripts() {
+	ScriptAnyValue a;
+	if (pScriptSystem->GetGlobalAny("g_gameRules", a) && a.table) {
+		bool v = false;
+		if (!a.table->GetValue("IsModified", v)) {
+			if (!LoadScript("Files\\GameRules.bin")) {
+				pSystem->Quit();
+			}
+		}
+	}
 }
 
 void CommandClMaster(IConsoleCmdArgs *pArgs){
@@ -177,15 +225,26 @@ bool __fastcall GetSelectedServer(void *self, void *addr, SServerInfo& server) {
 			}
 			ip = getField(int, &server, off1);
 			port = (int)getField(unsigned short, &server, off2);
+			port &= 0xFFFF;
 		}
 		else if (GAME_VER == 5767) {
-			ip = getField(int, &server, 0x30);
-			port = (int)getField(unsigned short, &server, 0x34);
+			unsigned char b = getField(unsigned char, &server, 0x38);
+			int off1 = 0x80;
+			int off2 = 0x84;
+			if (b != 0xFE) {
+				off1 += 0x40;
+				off2 += 0x40;
+			}
+			ip = getField(int, &server, off1);
+			port = (int)getField(unsigned short, &server, off2);
+			port &= 0xFFFF;
+			//MemScan(&server, 0x100);
 		}
 #else
 		if (GAME_VER == 5767) {
 			ip = (int)getField(int, &server, 0x14);
 			port = (int)getField(int, &server, 0x18);
+			port &= 0xFFFF;
 		}
 #endif
 		sprintf(sz_ip, "%d.%d.%d.%d", (ip) & 0xFF, (ip >> 8) & 0xFF, (ip >> 16) & 0xFF, (ip >> 24) & 0xFF);
@@ -233,9 +292,7 @@ bool __fastcall HandleFSCommand(void *self, void *addr, const char *pCmd, const 
 	return pHandleFSCommand(self, addr, pCmd, pArgs);
 }
 int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
-	//unhook(pGameUpdate);
-	//int res = pGameUpdate(self, addr, p1, p2);
-	//hook((void*)pGameUpdate, (void*)GameUpdate);
+	PostInitScripts();
 	OnUpdate(0.0f);
 	return pGameUpdate(self, addr, p1, p2);
 }
@@ -243,9 +300,15 @@ int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
 void OnUpdate(float frameTime) {
 	bool eventFinished = false;
 
-	for (int i = 0; g_objectsInQueue && i < MAX_ASYNC_QUEUE; i++) {
+	static bool firstRun = true;
+	if (firstRun) {
+		firstRun = false;
+		InitGameObjects();
+	}
+
+	for (std::list<AsyncData*>::iterator it = asyncQueue.begin(); g_objectsInQueue && it != asyncQueue.end(); it++) {
 		g_mutex.Lock();
-		AsyncData *obj = asyncQueue[i];
+		AsyncData *obj = *it;
 		if (obj) {
 			if (obj->finished) {
 				try {
@@ -262,7 +325,8 @@ void OnUpdate(float frameTime) {
 				}
 				eventFinished = true;
 				g_objectsInQueue--;
-				asyncQueue[i] = 0;
+				asyncQueue.erase(it);
+				it--;
 			} else if (obj->executing) {
 				try {
 					obj->onUpdate();
@@ -286,6 +350,12 @@ void OnUpdate(float frameTime) {
 		pScriptSystem->EndCall();
 	}
 	localCounter++;
+}
+
+void InitGameObjects() {
+	REGISTER_GAME_OBJECT(pGameFramework, IntegrityService, "Scripts/Entities/Environment/Shake.lua");
+	pScriptSystem->BeginCall("InitGameObjects");
+	pScriptSystem->EndCall();
 }
 
 void MemScan(void *base,int size){
@@ -334,20 +404,11 @@ bool TestFileWrite(const char *path) {
 	return false;
 }
 bool TestGameFilesWritable() {
-	char cwd[5120];
-	GetModuleFileNameA(0, cwd, 5120);
-	int last = -1;
-	for (int i = 0, j = strlen(cwd); i<j; i++) {
-		if (cwd[i] == '\\')
-			last = i;
-	}
-	if (last >= 0)
-		cwd[last] = 0;
-	char params[5120];
-	char gameDir[5120];
-	sprintf(gameDir, "%s\\..\\Game\\Levels\\_write.dat", cwd);
+	char cwd[MAX_PATH], params[2 * MAX_PATH], gameDir[2 * MAX_PATH];
+	getGameFolder(cwd);
+	sprintf(gameDir, "%s\\Game\\Levels\\_write.dat", cwd);
 	if (TestFileWrite(gameDir)) return true;
-	sprintf(cwd, "%s\\..\\SfwClFiles\\", cwd);
+	sprintf(cwd, "%s\\SfwClFiles\\", cwd);
 	SHELLEXECUTEINFOA info;
 	ZeroMemory(&info, sizeof(SHELLEXECUTEINFOA));
 	info.lpDirectory = cwd;
@@ -387,6 +448,9 @@ extern "C" {
 
 				pGetSelectedServer=(PFNGSS)0x39313C40;
 				hook((void*)pGetSelectedServer,(void*)GetSelectedServer);
+
+
+				pGameUpdate = (PFNGU)hookp((void*)0x390B8A40, (void*)GameUpdate, 15);
 
 				break;
 			case 6156:
@@ -431,6 +495,8 @@ extern "C" {
 
 				pGetSelectedServer=(PFNGSS)0x3922E650;
 				hook((void*)pGetSelectedServer,(void*)GetSelectedServer);
+
+				pGameUpdate = (PFNGU)hookp((void*)0x390B3EB0, (void*)GameUpdate, 7);
 
 				break;
 			case 6156:
@@ -508,19 +574,27 @@ extern "C" {
 		GAME_VER=version;
 		patchMem(version);
 		hook(gethostbyname,Hook_GetHostByName);
-		g_gameFilesWritable = TestGameFilesWritable();
+		g_gameFilesWritable = true; // lets pretend installer solved it for us!! TestGameFilesWritable();
+
 
 		pGameFramework=(IGameFramework*)ptr;
 		pSystem=pGameFramework->GetISystem();
 		pScriptSystem=pSystem->GetIScriptSystem();
 		pConsole=pSystem->GetIConsole();
 		pConsole->AddCommand("cl_master",CommandClMaster,VF_RESTRICTEDMODE);
-		pConsole->AddCommand("reload_maps",CommandRldMaps,VF_RESTRICTEDMODE);
+		pConsole->AddCommand("reload_maps", CommandRldMaps, VF_RESTRICTEDMODE);
+
+		InitScripts();
 
 		pScriptSystem->SetGlobalValue("GAME_VER",version);
+#ifdef _WIN64
+		extern long PROTECT_FLAG;
+		pScriptSystem->SetGlobalValue("__DUMMY0__", PROTECT_FLAG);
+#endif
 #ifdef MAX_PERFORMANCE
 		pScriptSystem->SetGlobalValue("MAX_PERFORMANCE", true);
 #endif
+
 		if(!luaApi)
 			luaApi=new CPPAPI(pSystem,pGameFramework);
 		if(!socketApi)

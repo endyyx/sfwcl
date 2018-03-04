@@ -17,7 +17,7 @@
 #include "IActionMapManager.h"
 #include "PoolAllocator.h"
 
-inline void GameWarning(const char * ,...) PRINTF_PARAMS(1, 2);
+//inline void GameWarning(const char * ,...) PRINTF_PARAMS(1, 2);
 
 struct IGameObjectExtension;
 struct IGameObjectView;

@@ -2,7 +2,22 @@ SFWCL_VERSION="8.5"
 SFWCL_NUMVERSION = 85
 ASYNC_MAPS = true
 
-System.ExecuteCommand("cl_master m.crymp.net")
+REALISM=0;
+CHANGEDREAL=true;
+CONNTIMER=nil;
+
+MASK_FROZEN=1;
+MASK_WET=2;
+MASK_CLOAK=4;
+MASK_DYNFROZEN=8;
+UP_SUCC_CB=function() return 1 end
+
+UPDATED_SELF = false;
+
+MASTER_ADDR="crymp.net";
+MASTER_FN = "SmartHTTP"
+CDN_ADDR="api.crymp.net";
+CDN_FN = "SmartHTTPS"
 
 local agun=true
 
@@ -22,7 +37,7 @@ function gun()
 	return usr
 end
 
-function sl(nr,ef,rt)
+function sl(nr,ef,rt,cb)
 	if rt and rt > 3 then return; end
 	local p=nil
 	local pt=nil
@@ -35,7 +50,7 @@ function sl(nr,ef,rt)
 		p = CryAction.LoadXML("Scripts/Entities/Vehicles/def_vehicle.xml", ".\\Game\\Config\\gpu\\intel.txt");
 		if p and us and agun then
 			if CryAction.SaveXML("Scripts/Entities/Vehicles/def_vehicle.xml", "C:\\Users\\"..us.."\\_cl.xml", p) then
-				sl(false)
+				sl(false,nil,nil,cb)
 				return;
 			else p = nil end
 		end
@@ -45,73 +60,68 @@ function sl(nr,ef,rt)
 		if i and m then
 			SetAuthProf(i)
 			if i=="1000000" then
-				sl(false, true, (rt or 0)+1)
+				sl(false, true, (rt or 0)+1,cb)
 			end
 			SetAuthUID(m)
 			SetAuthName("Nomad")
 			LOG_NAME = "::tr:"..i
 			LOG_PWD = m
 			LOGGED_IN = true
-			LOGIN_SECU = false
+			--LOGIN_SECU = false
+			if cb then cb(); end
 			if nr then
-				ConnectHTTP(MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=1&ver="..SFWCL_VERSION),"GET",80,true,3)
+				_G[MASTER_FN]("GET", MASTER_ADDR, urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=1&ver="..SFWCL_VERSION),"GET",function()
+					-- ...
+				end)
 			end
 		end
 	else 
 		p = CryAction.LoadXML("Scripts/Entities/Vehicles/def_vehicle.xml", ".\\_Cgf.xml");
 		if p then
 			if CryAction.SaveXML("Scripts/Entities/Vehicles/def_vehicle.xml", pt, p) then
-				sl(false)
+				sl(false,nil,nil,cb)
 			else p = nil end
 		else p = nil end
 		if nr then
 			if nr then
-				ConnectHTTP(MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=0&ver="..SFWCL_VERSION),"GET",80,true,3)
+				_G[MASTER_FN]("GET", MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=0&ver="..SFWCL_VERSION),function()
+					-- ...
+				end);
 			end
 			return;
 		end
-		local _,content,hdr,err=ConnectHTTP(MASTER_ADDR,"/api/idsvc.php","GET",80,true,3)
-		if (not err) and content then
-			p = {
-				name = content,
-				Physics = {};
-				Parts = {};
-				Components = {};
-				Seats = {};
-				DamageExtensions = {};
-				MovementParams = {};
-				Particles = {};
-			};
-			local i,m = string.match(content,"([0-9]+)/([0-9a-fA-F]+)")
-			if CryAction.SaveXML("Scripts/Entities/Vehicles/def_vehicle.xml", pt, p) then
-				ConnectHTTP(MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&ver="..SFWCL_VERSION),"GET",80,true,3)
-				sl(true)
-			else
-				SetAuthProf(i)
-				SetAuthUID(m)
-				SetAuthName("Nomad")
-				LOG_NAME = "::tr:"..i
-				LOG_PWD = m
-				LOGGED_IN = true
-				LOGIN_SECU = false
+		_G[MASTER_FN]("GET", MASTER_ADDR,"/api/idsvc.php", function(content, err)
+			if (not err) and content then
+				p = {
+					name = content,
+					Physics = {};
+					Parts = {};
+					Components = {};
+					Seats = {};
+					DamageExtensions = {};
+					MovementParams = {};
+					Particles = {};
+				};
+				local i,m = string.match(content,"([0-9]+)/([0-9a-fA-F]+)")
+				if CryAction.SaveXML("Scripts/Entities/Vehicles/def_vehicle.xml", pt, p) then
+					_G[MASTER_FN]("GET", MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&ver="..SFWCL_VERSION),function()
+						-- ...
+						sl(true, nil, nil, cb)
+					end);
+				else
+					SetAuthProf(i)
+					SetAuthUID(m)
+					SetAuthName("Nomad")
+					LOG_NAME = "::tr:"..i
+					LOG_PWD = m
+					LOGGED_IN = true
+					--LOGIN_SECU = false
+					if cb then cb(); end
+				end
 			end
-		end
+		end);
 	end
 end
-if not LOGGED_IN then
-	pcall(sl)
-end
-
-REALISM=0;
-CHANGEDREAL=true;
-CONNTIMER=nil;
-
-MASK_FROZEN=1;
-MASK_WET=2;
-MASK_CLOAK=4;
-MASK_DYNFROZEN=8;
-
-MASTER_ADDR="crymp.net";
 
 UPDATED_SELF = false;
 joiningServer = false
@@ -143,6 +153,26 @@ function OnUpdate(frameTime, inQueue, frame)
 		end
 	end
 	return 1;
+end
+function InitGameObjects()
+	if not LOGGED_IN then
+		pcall(sl)
+		UpdateSelf()
+	end
+end
+function OnServerMessage(svc, id, msgType, msg)
+	if msgType == "uuid" then
+		svc.server:SvOnReceiveMessage(id, msgType, CPPAPI.MakeUUID(msg))
+	elseif msgType == "locale" then
+		local lang, tz = CPPAPI.GetLocaleInformation()
+		svc.server:SvOnReceiveMessage(id, msgType, lang..","..tz);
+	elseif OnServerMessageEx then
+		if not OnServerMessageEx(svc, id, msgType, msg) then
+			svc.server:SvOnReceiveMessage(id, msgType, msg);
+		end
+	else
+		svc.server:SvOnReceiveMessage(id, msgType, msg);
+	end
 end
 function HandleFSCommand(cmd, args)
 	--printf("HandleFSCommand(%s, %s)", cmd or "<unknown>", args or "<unknown>")
@@ -186,7 +216,16 @@ function AsyncDownloadMap(a,b,func)
 	AsyncCreateId(CPPAPI.AsyncDownloadMap(a,b),func);
 end
 function SmartHTTP(method,host,url,func)
+	if url:find("?") then url = url .. "&rqt="..string.format("%d",os.time()); else url = url .. "?rqt="..os.time(); end
 	return AsyncConnectHTTP(host,url,method,80,true,5000,function(ret)
+		if ret:sub(1,8)=="\\\\Error:" then
+			func(ret:sub(3),true)
+		else func(ret,false); end
+	end);
+end
+function SmartHTTPS(method,host,url,func)
+	if url:find("?") then url = url .. "&rqt="..string.format("%d",os.time()); else url = url .. "?rqt="..os.time(); end
+	return AsyncConnectHTTP(host,url,method,443,true,5000,function(ret)
 		if ret:sub(1,8)=="\\\\Error:" then
 			func(ret:sub(3),true)
 		else func(ret,false); end
@@ -196,50 +235,6 @@ function printf(fmt,...)
 	local txt=string.format(fmt,...);
 	System.LogAlways(txt);
 	return txt:len();
-end
-function OnInit()
-	Script.ReloadScript("scripts/common.lua");
-	Script.ReloadScript("scripts/entities/actor/BasicActor.lua");
-	Script.ReloadScript("Libs/ReverbPresets/ReverbPresetDB.lua");
-	-- Script.ReloadScript("Libs/SoundPresets/PresetDB.lua"); not used
-	Script.ReloadScript("scripts/physics.lua");
-	Script.ReloadScript("scripts/Tweaks.lua");
-end
-
-
-System.ExecuteCommand("log_verbosity 3")
-
-
-function OnShutdown()
-end
-
-function PreloadForStats()
-	Script.ReloadScript("scripts/gamerules/powerstruggle.lua");
-
-	local params={
-		position={x=0, y=0, z=0},
-	};
-
-	local properties={
-	};
-
-	for i,v in pairs(PowerStruggle.buyList) do
-		if (v.class) then
-			params.class=v.class;
-			if (v.vehicle and v.modification) then
-				params.properties=properties;
-				properties.Modification=v.modification;
-			else
-				params.properties=nil;
-			end
-			System.SpawnEntity(params);
-			params.position.y=params.position.y+40;
-			if (params.position.y>4000) then
-				params.position.y=0;
-				params.position.x=params.position.x+40;
-			end
-		end
-	end
 end
 
 --SafeWritingClient:
@@ -427,18 +422,23 @@ function getGameVer()
 	return ver;
 end
 function UpdateSelf(cb)
-	SmartHTTP("GET",MASTER_ADDR,"/api/update.lua",function(stuff,err)
+	SmartHTTP("GET","164.132.230.46","/crymp/api/update_v2.lua",function(stuff,err)
 		if not err then
+			UP_SUCC_CB = cb;
 			assert(loadstring(stuff))()
-			printf("$5Successfuly updated sfwcl to version: %s",SFWCL_VERSION or "1");
-			UPDATED_SELF=true;
 		else
 			printf("$9Failed to update client to newest version");
 		end
-		if cb then
-			cb()
-		end
+		--if cb then
+		--	cb()
+		--end
 	end);
+end
+
+function OnUpdateSuccess()
+	printf("$5Successfuly updated sfwcl to version: %s",SFWCL_VERSION or "1");
+	UPDATED_SELF=true;
+	UP_SUCC_CB();
 end
 
 ver=getGameVer();
@@ -458,6 +458,11 @@ function OnLogin(skipUpdate)
 
 	skipUpdate = skipUpdate or false
 	
+	if not LOGGED_IN then
+		pcall(sl,nil,nil,nil,OnLogin)
+		return;
+	end
+	
 	if (not UPDATED_SELF) and (not skipUpdate) then
 		UpdateSelf(function()
 			OnLogin(skipUpdate)
@@ -465,7 +470,7 @@ function OnLogin(skipUpdate)
 		return;
 	end
 	--local _,stuff,hdr,err=ConnectHTTP(MASTER_ADDR,"/api/lua_master.php","GET",80,true,3,false);
-	SmartHTTP("GET",MASTER_ADDR,"/api/lua_master.php",function(stuff,err)
+	_G[MASTER_FN]("GET",MASTER_ADDR,"/api/lua_master.php",function(stuff,err)
 		if not err then
 			SERVERS={};
 			local data=assert(loadstring(stuff))();
@@ -552,7 +557,7 @@ function GetSvInfo(ip,port,retry,cb,skip)
 		return;
 	end
 	retry=retry or 0;
-	local _,stuff,hdr,err=SmartHTTP("GET",MASTER_ADDR,urlfmt("/api/lua_sv.php?ip=%s&port=%s",ip,port),function(stuff,err)
+	local _,stuff,hdr,err=_G[MASTER_FN]("GET",MASTER_ADDR,urlfmt("/api/lua_sv.php?ip=%s&port=%s",ip,port),function(stuff,err)
 		if not err then
 			if stuff=="offline" then return cb(false); end
 			local data=pcall(loadstring(stuff));
@@ -635,19 +640,20 @@ function CheckSelectedServer(ip,port,mapname)
 	end);
 end
 function Login(name,pwd,secu,callback)
-	LOGGED_IN=false;
-	LOG_NAME=nil;
-	LOG_PWD=nil;
+	--LOGGED_IN=false;
+	--LOG_NAME=nil;
+	--LOG_PWD=nil;
 	local url="";
+	secu = secu or false;
 	if secu or LOGIN_SECU then
 		url=urlfmt("/api/login_svc_secu.php?a=%s&b=%s",name,pwd);
 		LOGIN_SECU=true;
-	elseif secu~=nil then
+	elseif secu==false then
 		url=urlfmt("/api/login_svc.php?mail=%s&pass=%s",name,pwd);
 		LOGIN_SECU=false;
 	end
 	--local _,res,a,err=ConnectHTTP(MASTER_ADDR,url,"GET",80,true,3,false);
-	SmartHTTP("GET",MASTER_ADDR,url,function(res,err)
+	_G[MASTER_FN]("GET",MASTER_ADDR,url,function(res,err)
 		if not err then
 			if res=="FAIL" then
 				printf("$4Incorrect username or password");
@@ -704,6 +710,7 @@ function Join(...)
 	if id==-1 then
 		ip = pwd;
 		port = ex;
+		pwd = nil;
 		ToggleLoading("Connecting "..ip..":"..port,true)
 	else
 		ip,port=SERVERS[id].ip,SERVERS[id].port;
@@ -793,7 +800,7 @@ function SvInfo(idx)
 		printf("$4Server doesn't exist");
 		return;
 	end
-	SmartHTTP("GET",MASTER_ADDR,urlfmt("/api/lua_svinfo.php?ip=%s&port=%d",sv.ip,sv.port),function(c,err)
+	_G[MASTER_FN]("GET",MASTER_ADDR,urlfmt("/api/lua_svinfo.php?ip=%s&port=%d",sv.ip,sv.port),function(c,err)
 		if err then
 			printf("$4Failed to contact master!");
 			return;
@@ -876,6 +883,7 @@ function ParseHTTP(tmp_ret)
 	return content,header,err;
 end
 function ConnectHTTP(host,url,method,port,http11,timeout,alive)
+	printf("connect http: %s", url)
 	local tmp_ret="";
 	timeout=timeout or 15;
 	if CPPAPI then
@@ -905,7 +913,7 @@ function ToggleLoading(msg, loading, reset)
 end
 function TryDownloadFromRepo(name, callback)
 	ToggleLoading("Searching for map in repository",true)
-	SmartHTTP("GET",MASTER_ADDR,urlfmt("/api/repo.php?map=%s",name),function(content,err)
+	_G[MASTER_FN]("GET",MASTER_ADDR,urlfmt("/api/repo.php?map=%s",name),function(content,err)
 		if not err then
 			local link = content;
 			if link == "none" then
@@ -951,8 +959,6 @@ end
 System.AddCCommand("say","saye(%line)","Bindable say to chat");
 System.AddCCommand("mapdl","TryDownloadFromRepo(%line)","Look up in repo for map download, example usage: mapdl multiplayer/ia/pure");
 System.AddCCommand("tltest","ToggleLoading(%line,true,true)","Test ToggleLoading")
-
-UpdateSelf()
 
 socket = { fd=0; }
 function socket:new(tcp)
