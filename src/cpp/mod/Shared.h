@@ -1,6 +1,6 @@
 #pragma once
 
-//#define OFFICIAL_BUILD
+#define OFFICIAL_BUILD
 //comment for release builds
 #define PRERELEASE_BUILD
 //if enabled, mutexes will be used to ensure safe threading

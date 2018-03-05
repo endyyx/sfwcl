@@ -8,7 +8,6 @@
 #include <ICryPak.h>
 #include "Crypto.h"
 #include "Protect.h"
-//#include <stdint.h>
 
 template <int T> struct StaticBuffer{
 	char content[T];

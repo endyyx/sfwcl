@@ -5,12 +5,14 @@
 #include <sstream>
 #include "Mutex.h"
 #include "Protect.h"
+#include "RPC.h"
 //#include <mutex>
 
 #define CLIENT_BUILD 1001
 //#define AUTO_UPDATE
 
 #define WIN32_LEAN_AND_MEAN
+
 #include <Windows.h>
 #include <shellapi.h>
 
@@ -42,6 +44,7 @@ IGame *pGame = 0;
 IScriptSystem *pScriptSystem=0;
 IGameFramework *pGameFramework=0;
 IFlashPlayer *pFlashPlayer=0;
+RPC *rpc = 0;
 //AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
 std::list<AsyncData*> asyncQueue;
 Atomic<const char*> mapDlMessage(0);
@@ -599,6 +602,8 @@ extern "C" {
 			luaApi=new CPPAPI(pSystem,pGameFramework);
 		if(!socketApi)
 			socketApi=new Socket(pSystem,pGameFramework);
+		if (!rpc)
+			rpc = new RPC();
 
 		return pGame;
 	}

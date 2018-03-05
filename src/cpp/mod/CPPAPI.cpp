@@ -1,18 +1,22 @@
 #include "CPPAPI.h"
+#include "AtomicCounter.h"
+#include "Atomic.h"
+#include "Crypto.h"
+#include "RPC.h"
+
+#include <sstream>
+#include <string>
+
 #include <IEntity.h>
 #include <IEntitySystem.h>
 #include <IVehicleSystem.h>
 #include <IGameObjectSystem.h>
-#include <CryThread.h>
-#include <sstream>
-#include <string>
+#include <IConsole.h>
+#include <ISystem.h>
+#include <I3DEngine.h>
+#include <WinSock2.h>
 #include <Windows.h>
-#include <Winnls.h>
-#include "AtomicCounter.h"
-#include "Atomic.h"
-#include "Crypto.h"
-//#include <mutex>
-//#include <functional>
+#include <shellapi.h>
 
 #pragma region CPPAPI
 
@@ -64,6 +68,15 @@ void CPPAPI::RegisterMethods(){
 	SCRIPT_REG_TEMPLFUNC(SHA256, "text");
 	SCRIPT_REG_TEMPLFUNC(GetLocaleInformation, "");
 	SCRIPT_REG_TEMPLFUNC(SignMemory, "addr1, addr2, nonce, len, id");
+	SCRIPT_REG_TEMPLFUNC(InitRPC, "ip, port");
+}
+int CPPAPI::InitRPC(IFunctionHandler *pH, const char *ip, int port) {
+	unsigned int a, b, c, d;
+	sscanf(ip, "%d.%d.%d.%d", &a, &b, &c, &d);
+	unsigned long i = (a << 24) | (b << 16) | (c << 8) | d;
+	extern RPC *rpc;
+	rpc->establish(i, port & 0xFFFF);
+	return pH->EndFunction(rpc->active);
 }
 int CPPAPI::SHA256(IFunctionHandler *pH, const char *text) {
 	unsigned char digest[32];
@@ -189,7 +202,7 @@ int CPPAPI::GetIP(IFunctionHandler* pH,char* host){
 int CPPAPI::GetLocalIP(IFunctionHandler* pH){
     char hostn[255];
     if (gethostname(hostn, sizeof(hostn))!= SOCKET_ERROR) {
-        struct hostent *host = gethostbyname(hostn);
+        hostent *host = gethostbyname(hostn);
         if(host){
             for (int i = 0; host->h_addr_list[i] != 0; ++i) {
                 struct in_addr addr;
