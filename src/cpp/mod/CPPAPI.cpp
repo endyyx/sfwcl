@@ -6,6 +6,7 @@
 
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include <IEntity.h>
 #include <IEntitySystem.h>
@@ -69,6 +70,20 @@ void CPPAPI::RegisterMethods(){
 	SCRIPT_REG_TEMPLFUNC(GetLocaleInformation, "");
 	SCRIPT_REG_TEMPLFUNC(SignMemory, "addr1, addr2, nonce, len, id");
 	SCRIPT_REG_TEMPLFUNC(InitRPC, "ip, port");
+	SCRIPT_REG_TEMPLFUNC(SendRPCMessage, "method, params...");
+}
+int CPPAPI::SendRPCMessage(IFunctionHandler *pH, const char *method, SmartScriptTable params) {
+	IScriptTable::Iterator it = params->BeginIteration();
+	std::vector<const char*> args;
+	while (params->MoveNext(it)) {
+		args.push_back(it.value.str);
+	}
+	extern RPC* rpc;
+	if (rpc && rpc->active) {
+		rpc->sendMessage(method, args);
+		return pH->EndFunction(true);
+	}
+	return pH->EndFunction(false);
 }
 int CPPAPI::InitRPC(IFunctionHandler *pH, const char *ip, int port) {
 	unsigned int a, b, c, d;
@@ -109,7 +124,7 @@ int CPPAPI::MakeUUID(IFunctionHandler *pH, const char *salt) {
 	}
 
 	strcpy(pool, hwid);
-	strcpy(pool, salt);
+	strcat(pool, salt);
 	sha256((const unsigned char*)pool, strlen(pool), digest);
 	strcpy(pool, hwid);
 	strcat(pool, ":");

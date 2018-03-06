@@ -14,21 +14,10 @@ void RPC::establish(unsigned long ip, int port) {
 		sock = 0;
 		active = false;
 	}
-	sockaddr_in sa;
-	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	ZeroMemory(&sa, sizeof(sa));
-	sa.sin_family = AF_INET;
-	sa.sin_addr.s_addr = htonl(ip);
-	sa.sin_port = htons(port);
+	this->ip = ip;
+	this->port = port&0xFFFF;
 	buffer = new unsigned char[BUFFER_SIZE];
-	if (!connect(sock, (const sockaddr*)&sa, sizeof(sockaddr))) {
-		active = true;
-		head = true;
-		expect = 4;
-		received = 0;
-		CreateThread(0, 0, (LPTHREAD_START_ROUTINE)&RPC::recv_thread, (LPVOID)this, 0, 0);
-	}
-	else active = false;
+	CreateThread(0, 16384, (LPTHREAD_START_ROUTINE)&RPC::recv_thread, (LPVOID)this, 0, 0);
 }
 void RPC::shutdown() {
 	closesocket(sock);
@@ -36,24 +25,53 @@ void RPC::shutdown() {
 	active = false;
 }
 void RPC::execute() {
-	const char *a = (const char*)buffer, *b = 0, *c = 0, *d = 0, *e = 0;
-	b = strchr(a, 0);
-	if (b) c = strchr(++b, 0);
-	if (c) d = strchr(++c, 0);
-	if (d) e = strchr(++d, 0);
-	if (e) e++;
-	RPCEvent *evt = new RPCEvent(a, b, c, d, e);
+	std::vector<std::string> args;
+	std::string arg = "";
+	for (int i = 0; i < received; i++) {
+		char n = (char)((buffer[i] ^ 0x5A)&0xFF);
+		if (n == 0) {
+			args.push_back(arg);
+			arg = "";
+		}
+		else arg += n;
+	}
+	RPCEvent *evt = new RPCEvent(args);
 	evt->callAsync();
 }
-void RPC::send(char *data, int len) {
+void RPC::send(const char *data, int len) {
 	if (active) {
 		::send(sock, (char*)&len, 4, 0);
 		::send(sock, data, len, 0);
 	}
 }
+void RPC::sendMessage(const char *method, std::vector<const char*>& args) {
+	std::string str = method;
+	str += '\0';
+	for (auto& arg : args) {
+		str += arg; str += '\0';
+	}
+	for (size_t i = 0; i < str.size(); i++)
+		str[i] = (str[i] ^ 0x5A)&0xFF;
+	send(str.c_str(), str.size());
+}
 void RPC::recv_thread(RPC *self) {
 	WSADATA wsa;
 	WSAStartup(0x202, &wsa);
+	self->sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	sockaddr_in sa;
+	ZeroMemory(&sa, sizeof(sa));
+	sa.sin_family = AF_INET;
+	sa.sin_addr.s_addr = htonl(self->ip);
+	sa.sin_port = htons(self->port);
+	if (!connect(self->sock, (const sockaddr*)&sa, sizeof(sockaddr))) {
+		self->active = true;
+		self->head = true;
+		self->expect = 4;
+		self->received = 0;
+	} else {
+		self->active = false;
+		return;
+	}
 	while (true) {
 		int n = recv(self->sock, (char*)self->buffer + self->received, self->expect, 0);
 		if (n <= 0) {

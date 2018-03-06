@@ -34,6 +34,7 @@ public:
 	int GetLocaleInformation(IFunctionHandler *pH);
 	int SignMemory(IFunctionHandler *pH, const char *addr1, const char *addr2, const char* len, const char *nonce, const char *id);
 	int InitRPC(IFunctionHandler *pH, const char *ip, int port);
+	int SendRPCMessage(IFunctionHandler *pH, const char *method, SmartScriptTable args);
 	//int ClearLayer(IFunctionHandler* pH,int layer);
 protected:
 	void RegisterMethods();
@@ -226,67 +227,17 @@ struct DownloadMapStruct : public AsyncData {
 	}
 };
 struct RPCEvent : public AsyncData {
-	char *p1;
-	char *p2;
-	char *p3;
-	char *p4;
-	char *p5;
-	RPCEvent(const char *a, const char *b = 0, const char *c = 0, const char *d = 0, const char *e = 0) {
-		p1 = new char[strlen(a) + 2];
-		strcpy(p1, a);
-		if (b) {
-			p2 = new char[strlen(b) + 2]; strcpy(p2, b);
-		}
-		if (c) {
-			p3 = new char[strlen(c) + 2]; strcpy(p3, c);
-		}
-		if (d) {
-			p4 = new char[strlen(d) + 2]; strcpy(p4, d);
-		}
-		if (e) {
-			p5 = new char[strlen(e) + 2]; strcpy(p5, e);
-		}
+	std::vector<std::string> arguments;
+	RPCEvent(std::vector<std::string>& args) {
+		arguments = args;
 	}
 	~RPCEvent() {
-		if (p1) {
-			delete[] p1;
-			p1 = 0;
-		}
-		if (p2) {
-			delete[] p2;
-			p2 = 0;
-		}
-		if (p3) {
-			delete[] p3;
-			p3 = 0;
-		}
-		if (p4) {
-			delete[] p4;
-			p4 = 0;
-		}
-		if (p5) {
-			delete[] p5;
-			p5 = 0;
-		}
+		
 	}
 	virtual void postExec() {
 		extern IScriptSystem *pScriptSystem;
 		pScriptSystem->BeginCall("OnRPCEvent");
-		if (p1) {
-			pScriptSystem->PushFuncParam(p1);
-		}
-		if (p2) {
-			pScriptSystem->PushFuncParam(p2);
-		}
-		if (p3) {
-			pScriptSystem->PushFuncParam(p3);
-		}
-		if (p4) {
-			pScriptSystem->PushFuncParam(p4);
-		}
-		if (p5) {
-			pScriptSystem->PushFuncParam(p5);
-		}
+		for (auto& it : arguments) pScriptSystem->PushFuncParam(it.c_str());
 		pScriptSystem->EndCall();
 	}
 };

@@ -274,7 +274,7 @@ void __fastcall DisconnectError(void *self, void *addr, EDisconnectionCause dc, 
 		pScriptSystem->BeginCall("TryDownloadFromRepo");
 		pScriptSystem->PushFuncParam(serverMsg);
 		pScriptSystem->EndCall();
-	}
+	} else if (rpc) rpc->shutdown();
 	pDisconnectError(self, addr, dc, connecting, serverMsg);
 }
 bool __fastcall HandleFSCommand(void *self, void *addr, const char *pCmd, const char *pArgs) {

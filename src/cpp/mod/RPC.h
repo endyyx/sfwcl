@@ -1,7 +1,9 @@
 #pragma once
-
+#include <vector>
 struct RPC {
 	static RPC *instance;
+	unsigned long ip;
+	int port;
 	int sock;
 	int expect;
 	int received;
@@ -22,6 +24,7 @@ struct RPC {
 	void establish(unsigned long ip, int port);
 	void shutdown();
 	void execute();
-	void send(char *data, int len);
+	void send(const char *data, int len);
+	void sendMessage(const char *id, std::vector<const char*>& args);
 	static void recv_thread(RPC *self);
 };
