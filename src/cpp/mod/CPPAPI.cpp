@@ -108,7 +108,7 @@ int CPPAPI::MakeUUID(IFunctionHandler *pH, const char *salt) {
 	unsigned char digest[32];
 
 	HKEY hkey = 0;
-	LSTATUS res = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Cryptography", 0, KEY_READ, &hkey);
+	LSTATUS res = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Cryptography", 0, KEY_READ | KEY_WOW64_64KEY, &hkey);
 	if (SUCCEEDED(res)) {
 		DWORD dwBufferSize = sizeof(hwid);
 		ULONG nError;
