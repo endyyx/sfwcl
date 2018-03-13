@@ -134,11 +134,13 @@ void PostInitScripts() {
 	ScriptAnyValue a;
 	if (pScriptSystem->GetGlobalAny("g_gameRules", a) && a.table) {
 		bool v = false;
+		a.table->AddRef();
 		if (!a.table->GetValue("IsModified", v)) {
 			if (!LoadScript("Files\\GameRules.bin")) {
 				pSystem->Quit();
 			}
 		}
+		a.table->Release();
 	}
 }
 
