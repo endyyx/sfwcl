@@ -498,13 +498,13 @@ void AsyncConnect(int id, AsyncData *obj) {
 	if (content.length() > 2) {
 		if (content[0] == 0xFE && content[1] == 0xFF) content = content.substr(2);
 	}
-	obj->ret(content.c_str());
+	now->response = content;
 }
 bool AsyncDownloadMap(int id, AsyncData *obj) {
 	DownloadMapStruct *now = (DownloadMapStruct*)obj;
 	if (now) {
 		now->success = DownloadMapFromObject(now);
-		now->ret(now->success);
+		//now->ret(now->success);
 		return now->success;
 	}
 	return false;
