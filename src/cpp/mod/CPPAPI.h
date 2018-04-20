@@ -138,12 +138,8 @@ struct ConnectStruct : public AsyncData {
 	unsigned short port;
 	unsigned int timeout;
 	bool alive;
-	std::string response;
 	virtual void exec() {
 		AsyncConnect(this->id, (AsyncData*)this);
-	}
-	virtual void postExec(){
-		ret(response.c_str());
 	}
 };
 struct DownloadMapStruct : public AsyncData {
@@ -225,7 +221,6 @@ struct DownloadMapStruct : public AsyncData {
 			pLevelSystem->Rescan();
 		}
 		ToggleLoading("Downloading map", false);
-		ret(success);
 	}
 	virtual void exec() {
 		AsyncDownloadMap(this->id, (AsyncData*)this);
@@ -241,10 +236,9 @@ struct RPCEvent : public AsyncData {
 	}
 	virtual void postExec() {
 		extern IScriptSystem *pScriptSystem;
-		if (pScriptSystem->BeginCall("OnRPCEvent")) {
-			for (auto& it : arguments) pScriptSystem->PushFuncParam(it.c_str());
-			pScriptSystem->EndCall();
-		}
+		pScriptSystem->BeginCall("OnRPCEvent");
+		for (auto& it : arguments) pScriptSystem->PushFuncParam(it.c_str());
+		pScriptSystem->EndCall();
 	}
 };
 #pragma endregion
