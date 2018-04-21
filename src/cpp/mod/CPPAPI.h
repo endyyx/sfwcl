@@ -236,9 +236,10 @@ struct RPCEvent : public AsyncData {
 	}
 	virtual void postExec() {
 		extern IScriptSystem *pScriptSystem;
-		pScriptSystem->BeginCall("OnRPCEvent");
-		for (auto& it : arguments) pScriptSystem->PushFuncParam(it.c_str());
-		pScriptSystem->EndCall();
+		if (pScriptSystem->BeginCall("OnRPCEvent")) {
+			for (auto& it : arguments) pScriptSystem->PushFuncParam(it.c_str());
+			pScriptSystem->EndCall();
+		}
 	}
 };
 #pragma endregion
