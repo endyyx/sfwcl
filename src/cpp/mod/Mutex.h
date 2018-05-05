@@ -6,35 +6,29 @@
 
 //Just a really simple Mutex class, we don't need whole <mutex> of C++11 adding 200kB overhead to binary
 struct Mutex {
-	HANDLE hMutex;
-	DWORD threadId;
+	CRITICAL_SECTION cs;
 	const char *szName;
 	Mutex(const char *name=0) {
 		szName = name;
 #ifdef THREAD_SAFE
-		hMutex = CreateMutexA(0, false, name);
+		ZeroMemory(&cs, sizeof(cs));
+		InitializeCriticalSection(&cs);
 #endif
 	}
 	~Mutex() {
 #ifdef THREAD_SAFE
-		if (hMutex) {
-			CloseHandle(hMutex);
-		}
+		DeleteCriticalSection(&cs);
 #endif
 	}
-	bool Lock(DWORD timeo = INFINITE) {
+	bool Lock() {
 #ifdef THREAD_SAFE
-		DWORD res = WaitForSingleObject(hMutex, timeo);
-		threadId = GetCurrentThreadId();
-		if (res == WAIT_TIMEOUT) return false;
-		return res != WAIT_FAILED;
-#else
-		return true;
+		EnterCriticalSection(&cs);
 #endif
+		return true;
 	}
 	void Unlock() {
 #ifdef THREAD_SAFE
-		ReleaseMutex(hMutex);
+		LeaveCriticalSection(&cs);
 #endif
 	}
 };
