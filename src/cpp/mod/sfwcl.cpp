@@ -5,12 +5,14 @@
 #include <sstream>
 #include "Mutex.h"
 #include "Protect.h"
+#include "RPC.h"
 //#include <mutex>
 
 #define CLIENT_BUILD 1001
 //#define AUTO_UPDATE
 
 #define WIN32_LEAN_AND_MEAN
+
 #include <Windows.h>
 #include <shellapi.h>
 
@@ -42,6 +44,7 @@ IGame *pGame = 0;
 IScriptSystem *pScriptSystem=0;
 IGameFramework *pGameFramework=0;
 IFlashPlayer *pFlashPlayer=0;
+RPC *rpc = 0;
 //AsyncData *asyncQueue[MAX_ASYNC_QUEUE+1];
 std::list<AsyncData*> asyncQueue;
 Atomic<const char*> mapDlMessage(0);
@@ -131,11 +134,13 @@ void PostInitScripts() {
 	ScriptAnyValue a;
 	if (pScriptSystem->GetGlobalAny("g_gameRules", a) && a.table) {
 		bool v = false;
+		a.table->AddRef();
 		if (!a.table->GetValue("IsModified", v)) {
 			if (!LoadScript("Files\\GameRules.bin")) {
 				pSystem->Quit();
 			}
 		}
+		a.table->Release();
 	}
 }
 
@@ -145,12 +150,13 @@ void CommandClMaster(IConsoleCmdArgs *pArgs){
 		const char *to=pArgs->GetCommandLine()+strlen(pArgs->GetArg(0))+1;
 		strncpy(SvMaster, to, sizeof(SvMaster));
 	}
-	pScriptSystem->BeginCall("printf");
-	char buff[50];
-	sprintf(buff,"$0    cl_master = $6%s",SvMaster);
-	pScriptSystem->PushFuncParam("%s");
-	pScriptSystem->PushFuncParam(buff);
-	pScriptSystem->EndCall();
+	if (pScriptSystem->BeginCall("printf")) {
+		char buff[50];
+		sprintf(buff, "$0    cl_master = $6%s", SvMaster);
+		pScriptSystem->PushFuncParam("%s");
+		pScriptSystem->PushFuncParam(buff);
+		pScriptSystem->EndCall();
+	}
 }
 void CommandRldMaps(IConsoleCmdArgs *pArgs){
 	ILevelSystem *pLevelSystem = pGameFramework->GetILevelSystem();
@@ -160,9 +166,10 @@ void CommandRldMaps(IConsoleCmdArgs *pArgs){
 }
 
 void __fastcall OnShowLoginScr(void *self, void *addr) {
-	pScriptSystem->BeginCall("OnShowLoginScreen");
-	pScriptSystem->PushFuncParam(true);
-	pScriptSystem->EndCall();
+	if (pScriptSystem->BeginCall("OnShowLoginScreen")) {
+		pScriptSystem->PushFuncParam(true);
+		pScriptSystem->EndCall();
+	}
 	pFlashPlayer = *(IFlashPlayer**)(self);
 	pFlashPlayer->Invoke1("_root.Root.MainMenu.MultiPlayer.MultiPlayer.gotoAndPlay", "internetgame");
 }
@@ -249,12 +256,14 @@ bool __fastcall GetSelectedServer(void *self, void *addr, SServerInfo& server) {
 #endif
 		sprintf(sz_ip, "%d.%d.%d.%d", (ip) & 0xFF, (ip >> 8) & 0xFF, (ip >> 16) & 0xFF, (ip >> 24) & 0xFF);
 		IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
-		pScriptSystem->BeginCall("CheckSelectedServer");
-		pScriptSystem->PushFuncParam(sz_ip);
-		pScriptSystem->PushFuncParam(port);
-		if (GAME_VER == 6156)
-			pScriptSystem->PushFuncParam("<unknown map>");
-		pScriptSystem->EndCall();
+		if (pScriptSystem->BeginCall("CheckSelectedServer")) {
+			pScriptSystem->PushFuncParam(sz_ip);
+			pScriptSystem->PushFuncParam(port);
+
+			if (GAME_VER == 6156)
+				pScriptSystem->PushFuncParam("<unknown map>");
+			pScriptSystem->EndCall();
+		}
 	}
 	return result;
 }
@@ -268,27 +277,29 @@ void __fastcall JoinServer(void *self, void *addr) {
 void __fastcall DisconnectError(void *self, void *addr, EDisconnectionCause dc, bool connecting, const char* serverMsg) {
 	if (dc == eDC_MapNotFound || dc == eDC_MapVersion) {
 		IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
-		pScriptSystem->BeginCall("TryDownloadFromRepo");
-		pScriptSystem->PushFuncParam(serverMsg);
-		pScriptSystem->EndCall();
-	}
+		if (pScriptSystem->BeginCall("TryDownloadFromRepo")) {
+			pScriptSystem->PushFuncParam(serverMsg);
+			pScriptSystem->EndCall();
+		}
+	} else if (rpc) rpc->shutdown();
 	pDisconnectError(self, addr, dc, connecting, serverMsg);
 }
 bool __fastcall HandleFSCommand(void *self, void *addr, const char *pCmd, const char *pArgs) {
 	IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
-	pScriptSystem->BeginCall("HandleFSCommand");
+	if (pScriptSystem->BeginCall("HandleFSCommand")) {
 #ifdef IS64
-	if (pArgs)
-		pScriptSystem->PushFuncParam(pArgs - 1);
-	if (pCmd)
-		pScriptSystem->PushFuncParam(pCmd);
+		if (pArgs)
+			pScriptSystem->PushFuncParam(pArgs - 1);
+		if (pCmd)
+			pScriptSystem->PushFuncParam(pCmd);
 #else
-	if (pCmd)
-		pScriptSystem->PushFuncParam(pCmd);
-	if(pArgs)
-		pScriptSystem->PushFuncParam(pArgs);
+		if (pCmd)
+			pScriptSystem->PushFuncParam(pCmd);
+		if (pArgs)
+			pScriptSystem->PushFuncParam(pArgs);
 #endif
-	pScriptSystem->EndCall();
+		pScriptSystem->EndCall();
+	}
 	return pHandleFSCommand(self, addr, pCmd, pArgs);
 }
 int __fastcall GameUpdate(void* self, void *addr, bool p1, unsigned int p2) {
@@ -345,17 +356,19 @@ void OnUpdate(float frameTime) {
 #endif
 		) {	//loop every fourth cycle to save some performance
 		IScriptSystem *pScriptSystem = pSystem->GetIScriptSystem();
-		pScriptSystem->BeginCall("OnUpdate");
-		pScriptSystem->PushFuncParam(frameTime);
-		pScriptSystem->EndCall();
+		if (pScriptSystem->BeginCall("OnUpdate")) {
+			pScriptSystem->PushFuncParam(frameTime);
+			pScriptSystem->EndCall();
+		}
 	}
 	localCounter++;
 }
 
 void InitGameObjects() {
 	REGISTER_GAME_OBJECT(pGameFramework, IntegrityService, "Scripts/Entities/Environment/Shake.lua");
-	pScriptSystem->BeginCall("InitGameObjects");
-	pScriptSystem->EndCall();
+	if (pScriptSystem->BeginCall("InitGameObjects")) {
+		pScriptSystem->EndCall();
+	}
 }
 
 void MemScan(void *base,int size){
@@ -599,6 +612,8 @@ extern "C" {
 			luaApi=new CPPAPI(pSystem,pGameFramework);
 		if(!socketApi)
 			socketApi=new Socket(pSystem,pGameFramework);
+		if (!rpc)
+			rpc = new RPC();
 
 		return pGame;
 	}

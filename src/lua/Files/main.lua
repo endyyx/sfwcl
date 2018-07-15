@@ -15,9 +15,10 @@ UP_SUCC_CB=function() return 1 end
 UPDATED_SELF = false;
 
 MASTER_ADDR="crymp.net";
-MASTER_FN = "SmartHTTP"
+MASTER_FN = "SmartHTTP";
 CDN_ADDR="api.crymp.net";
-CDN_FN = "SmartHTTPS"
+CDN_FN = "SmartHTTPS";
+RPC_ID = "<unknown>";
 
 local agun=true
 
@@ -129,6 +130,12 @@ downloadingMap = false
 
 AsyncAwait={};
 
+function OnRPCEvent(method, id, ...)
+	if(method == "id") then RPC_ID = id; end
+	if method ~= "id" then
+		pcall(OnServerMessage, nil, id, method, ...)
+	end
+end
 function OnUpdate(frameTime, inQueue, frame)
 	if CPPAPI then
 		local ret=CPPAPI.DoAsyncChecks();
@@ -160,18 +167,36 @@ function InitGameObjects()
 		UpdateSelf()
 	end
 end
-function OnServerMessage(svc, id, msgType, msg)
+function OnServerMessage(svc, id, msgType, ...)
+	local msg = {...};
+	msg = msg[1] or "";
 	if msgType == "uuid" then
-		svc.server:SvOnReceiveMessage(id, msgType, CPPAPI.MakeUUID(msg))
+		local salt = {...};
+		CPPAPI.SendRPCMessage(msgType, { id , CPPAPI.MakeUUID(salt[1]) });
 	elseif msgType == "locale" then
 		local lang, tz = CPPAPI.GetLocaleInformation()
-		svc.server:SvOnReceiveMessage(id, msgType, lang..","..tz);
+		if svc then
+			svc.server:SvOnReceiveMessage(id, msgType, lang..","..tz);
+		else
+			CPPAPI.SendRPCMessage(msgType, { id, lang..","..tz });
+		end
+	elseif msgType=="sign" then
+		local nonces, a1, a2, lens = ...;
+		CPPAPI.SendRPCMessage(msgType, { id, CPPAPI.SignMemory(a1, a2, lens, nonces, id), a1, a2, lens })
 	elseif OnServerMessageEx then
-		if not OnServerMessageEx(svc, id, msgType, msg) then
-			svc.server:SvOnReceiveMessage(id, msgType, msg);
+		if not OnServerMessageEx(svc, id, msgType, ...) then
+			if svc then
+				svc.server:SvOnReceiveMessage(id, msgType, msg);
+			else
+				CPPAPI.SendRPCMessage(msgType, { id, ... });
+			end
 		end
 	else
-		svc.server:SvOnReceiveMessage(id, msgType, msg);
+		if svc then
+			CPPAPI.SendRPCMessage(msgType, { id, ... });
+		else
+			svc.server:SvOnReceiveMessage(id, msgType, msg);
+		end
 	end
 end
 function HandleFSCommand(cmd, args)
@@ -245,6 +270,7 @@ function LogMe(prof,uid,name)
 	if g_localActor then
 		local cmd=string.format("!validate %s %s %s",prof,uid,name);
 		g_gameRules.game:SendChatMessage(ChatToTarget,g_localActor.id,g_localActor.id,cmd);
+		g_gameRules.game:SendChatMessage(ChatToTarget,g_localActor.id,g_localActor.id,"!sync "..RPC_ID);
 		if CONNTIMER then
 			Script.KillTimer(CONNTIMER);
 		end
@@ -617,24 +643,16 @@ function CheckSelectedServer(ip,port,mapname)
 				TryGetMap(sv, sv.map, sv.mapdl)
 			end
 			if LOGGED_IN then
-				local res=Login(LOG_NAME,LOG_PWD,LOGIN_SECU);
+				local res=Login(LOG_NAME,LOG_PWD,LOGIN_SECU,function()
+					printf("InitRPC: %s:%d", sv.ip, tonumber(sv.port));
+					CPPAPI.InitRPC(sv.ip, tonumber(sv.port));
+				end);
 				if not res then return; end
-			else
-				local adj={"Silent","Loud","Quick","Slow","Lazy","Heavy","Smart","Dark","Bright","Good","Bad"};
-				local noun={"Storm","Box","Globe","Sphere","Man","Guy","Girl","Dog","Gun","Rocket"};
-				--if (not AUTH_UID) and (not AUTH_PROFILE) then
-					AUTH_UID="200000";
-					AUTH_PROFILE=800000+rand(1,199999);
-					AUTH_NAME="Nomad";--adj[rand(1,#adj)]..noun[rand(1,#noun)];
-				--end
 			end
 		else
 			AUTH_ID=nil;
 			AUTH_PROFILE=nil;
 			AUTH_NAME=nil;
-			--if mapname and (not MapAvailable(mapname)) then
-			--	finddownload(mapname);
-			--end
 			printf("$5Joining non Cry-MP server at %s:%d",ip,port);
 		end
 	end);
@@ -763,6 +781,8 @@ function Join(...)
 				TryGetMap(sv, sv.map, sv.mapdl)
 			else
 				AuthConn(ip);
+				printf("Authcon InitRPC: %s:%d", sv.ip, tonumber(sv.port));
+				CPPAPI.InitRPC(sv.ip, tonumber(sv.port));
 			end
 			FROM_SVLIST=sv;
 		end
@@ -771,15 +791,6 @@ function Join(...)
 		if LOGGED_IN then
 			local res=Login(LOG_NAME,LOG_PWD,LOGIN_SECU,callback);
 			if not res then return; end
-		else
-			local adj={"Silent","Loud","Quick","Slow","Lazy","Heavy","Smart","Dark","Bright","Good","Bad"};
-			local noun={"Storm","Box","Globe","Sphere","Man","Guy","Girl","Dog","Gun","Rocket"};
-			--if (not AUTH_UID) and (not AUTH_PROFILE) then
-				AUTH_UID="200000";
-				AUTH_PROFILE=800000+rand(1,199999);
-				AUTH_NAME="Nomad";--adj[rand(1,#adj)]..noun[rand(1,#noun)];
-			--end
-			callback()
 		end
 		--printf("$3Joining $6%s$3 ($5%s$8:$5%d$3) as $6%s",sv.name,sv.ip,tonumber(sv.port),AUTH_NAME);
 		

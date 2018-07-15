@@ -1,23 +1,16 @@
 #include "NetworkStuff.h"
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#include <winsock2.h>
+#include <windows.h>
 #include <wininet.h>
 #include <fstream>
 #include <sstream>
 
-static size_t curlCB(void *c, size_t sz, size_t n, void *out){
-    ((std::string*)out)->append((char*)c, sz*n);
-    return sz*n;
-}
-
 namespace Network{
-	struct AliveSock{
-		int sock;
-		sockaddr_in si;
-	};
 	std::string ReturnError(std::string error,int sock){ 
         closesocket(sock); 
         return error; 
     } 
-	static std::map<std::string,AliveSock> aliveSocks;
 	std::string Connect(std::string host, std::string page, INetMethods method, INetMethods http, int port, int timeout, bool alive) {
 
 		char *buffer = new char[16384];
@@ -48,7 +41,7 @@ namespace Network{
 			const char *form = params.c_str();
 			LPCSTR accept[] = { "*/*", 0 };
 
-			HINTERNET hSession = InternetOpen("SSMSafeWriting/2.8.1+",
+			HINTERNET hSession = InternetOpen("SSMSafeWriting/2.9.0+",
 				INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
 			HINTERNET hConnect = InternetConnect(hSession,host.c_str(),
 				port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);

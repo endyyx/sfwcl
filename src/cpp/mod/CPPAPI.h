@@ -1,16 +1,12 @@
 #pragma once
 
-#include "Shared.h"
+#include "Mutex.h"
+#include "Atomic.h"
+#include "NetworkStuff.h"
 #include <IGameFramework.h>
-#include <ISystem.h>
 #include <IScriptSystem.h>
 #include <IConsole.h>
 #include <ILevelSystem.h>
-#include <I3DEngine.h>
-#include <Windows.h>
-#include "Mutex.h"
-#include "NetworkStuff.h"
-#include "Atomic.h"
 
 #pragma region CPPAPIDefinitions
 class CPPAPI : public CScriptableBase {
@@ -37,6 +33,8 @@ public:
 	int SHA256(IFunctionHandler *pH, const char *text);
 	int GetLocaleInformation(IFunctionHandler *pH);
 	int SignMemory(IFunctionHandler *pH, const char *addr1, const char *addr2, const char* len, const char *nonce, const char *id);
+	int InitRPC(IFunctionHandler *pH, const char *ip, int port);
+	int SendRPCMessage(IFunctionHandler *pH, const char *method, SmartScriptTable args);
 	//int ClearLayer(IFunctionHandler* pH,int layer);
 protected:
 	void RegisterMethods();
@@ -61,7 +59,7 @@ inline void GetClosestFreeItem(int *out);
 BOOL WINAPI DownloadMapStructEnumProc(HWND hwnd, LPARAM lParam);
 #endif
 
-struct AsyncData{
+struct AsyncData {
 	int id;
 	bool finished;
 	bool executing;
@@ -226,6 +224,22 @@ struct DownloadMapStruct : public AsyncData {
 	}
 	virtual void exec() {
 		AsyncDownloadMap(this->id, (AsyncData*)this);
+	}
+};
+struct RPCEvent : public AsyncData {
+	std::vector<std::string> arguments;
+	RPCEvent(std::vector<std::string>& args) {
+		arguments = args;
+	}
+	~RPCEvent() {
+		
+	}
+	virtual void postExec() {
+		extern IScriptSystem *pScriptSystem;
+		if (pScriptSystem->BeginCall("OnRPCEvent")) {
+			for (auto& it : arguments) pScriptSystem->PushFuncParam(it.c_str());
+			pScriptSystem->EndCall();
+		}
 	}
 };
 #pragma endregion

@@ -1,13 +1,8 @@
 #pragma once
-
-#include "Shared.h"
 #include <string>
-#include <map>
-#include <Windows.h>
-
 namespace Network{
 	enum INetMethods{
-		INetGet=0xf25,INetPost,INetHTTP10,INetHTTP11
+		INetGet,INetPost,INetHTTP10,INetHTTP11
 	};
 	std::string Connect(std::string host,std::string page,INetMethods method=INetGet,INetMethods http=INetHTTP10,int port=80,int timeout=15,bool alive=false);
 	std::string ReturnError(std::string error);
