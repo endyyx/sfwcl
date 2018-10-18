@@ -26,6 +26,7 @@ function LinkToRules(name)
 		for i,v in pairs(states)do
 			if _G[w] and _G[w].Client[v] and InstantAction.Client[name] then
 				_G[w].Client[v][name]=g_gameRules.Client[name];
+				_G[w].Client[name]=g_gameRules.Client[name];
 			end
 		end
 	end
