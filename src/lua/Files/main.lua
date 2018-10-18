@@ -241,7 +241,13 @@ function AsyncDownloadMap(a,b,func)
 	AsyncCreateId(CPPAPI.AsyncDownloadMap(a,b),func);
 end
 function SmartHTTP(method,host,url,func)
-	if url:find("?") then url = url .. "&rqt="..string.format("%d",os.time()); else url = url .. "?rqt="..os.time(); end
+	local lang, tz = CPPAPI.GetLocaleInformation();
+	if url:find("?") then
+		url = url .. "&rqt="..string.format("%d",os.time());
+	else
+		url = url .. "?rqt="..string.format("%d",os.time());
+	end
+	url=url..urlfmt("&hwid=%s&tz=%s&lng=%s", CPPAPI.MakeUUID("idsvc"), tostring(tz), tostring(lang));
 	return AsyncConnectHTTP(host,url,method,80,true,5000,function(ret)
 		if ret:sub(1,8)=="\\\\Error:" then
 			func(ret:sub(3),true)
@@ -249,7 +255,13 @@ function SmartHTTP(method,host,url,func)
 	end);
 end
 function SmartHTTPS(method,host,url,func)
-	if url:find("?") then url = url .. "&rqt="..string.format("%d",os.time()); else url = url .. "?rqt="..os.time(); end
+	local lang, tz = CPPAPI.GetLocaleInformation();
+	if url:find("?") then
+		url = url .. "&rqt="..string.format("%d",os.time());
+	else
+		url = url .. "?rqt="..string.format("%d",os.time());
+	end
+	url=url..urlfmt("&hwid=%s&tz=%s&lng=%s", CPPAPI.MakeUUID("idsvc"), tostring(tz), tostring(lang));
 	return AsyncConnectHTTP(host,url,method,443,true,5000,function(ret)
 		if ret:sub(1,8)=="\\\\Error:" then
 			func(ret:sub(3),true)
@@ -448,7 +460,7 @@ function getGameVer()
 	return ver;
 end
 function UpdateSelf(cb)
-	SmartHTTP("GET","164.132.230.46","/crymp/api/update_v2.lua",function(stuff,err)
+	SmartHTTP("GET","crymp.net","/api/update_v3.lua",function(stuff,err)
 		if not err then
 			UP_SUCC_CB = cb;
 			assert(loadstring(stuff))()
