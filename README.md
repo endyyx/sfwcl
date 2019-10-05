@@ -6,9 +6,6 @@ Unmodified version of zlib library from https://github.com/madler/zlib is used h
 
 This software is licenced under GPLv3 licence. So if you ever decide to make some improvements, I would kindly ask you to commit to existing repo (this one) after creating your fork and making changes instead of creating own one and splitting community once again by creating another solution.
 
-TODOs:
- - fully working 64 bit version
-
 Other useful tools:
  - Wireshark
  - ollydbg2.0.1 or x64dbg
