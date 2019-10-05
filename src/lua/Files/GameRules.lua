@@ -34,30 +34,62 @@ end
 g_gameRules.IsModified=true;
 g_gameRules.Client.ClSetupPlayer=function(self,playerId)
 	self:SetupPlayer(System.GetEntity(playerId));
-	printf("Authenticating!");
-	local func=SinglePlayer.Client.OnUpdate;
-	SinglePlayer.Client.OnUpdate=function(a,b)
-		local last=GARBAGELAST or (_time-150);
-		if _time-last>=60 then
-			local before=collectgarbage("count")
-			collectgarbage("collect")
-			local removed=before-collectgarbage("count")
-			TOTALREMOVED=(TOTALREMOVED or 0)+removed;
-			TIMESREMOVED=(TIMESREMOVED or 0)+1;
-			GARBAGELAST=_time;
-			--printf("Collecting garbage");
-		end
-		func(a,b);
-	end
 	AuthLogin();
 	if g_localActor then
 		LAST_ACTOR=g_localActor;
 	end
 	INGAME=true;
 end
-g_gameRules.Client.OnUpdate=function(self,ft)
-	SinglePlayer.Client.OnUpdate(self, ft);
-	IntegrityUpdate();
+
+LinkToRules("ClSetupPlayer");
+
+System.AddCCommand("garbage",[[
+	System.LogAlways(string.format(">>Garbage removed totally: %.3f MB, average: %.3f MB",TOTALREMOVED/1024,(TOTALREMOVED/1024)/TIMESREMOVED));
+]],"Info about garbage");
+
+if not OldSP then OldSP = SinglePlayer.Client.OnUpdate end
+
+function HookedStartWorking(self, entityId, workName)
+	if workName:sub(1, 1) == "@" and RPC ~= nil then
+		if ALLOW_EXPERIMENTAL then
+			System.Log("Received RPC call: " .. workName)
+		end
+		local what = json.decode(workName:sub(2))
+		if what and what.method then
+			if ALLOW_EXPERIMENTAL then
+				System.Log("Resolved RPC method: " .. what.method)
+			end
+			local method = RPC[what.method]
+			if RPC_STATE then
+				if what.class then
+					method = RPC[what.class].method
+					if method then
+						_pcall(method, RPC[what.class], what.params, what.id)
+					end
+				elseif method then
+					_pcall(method, what.params, what.id)
+				end
+			end
+		end
+	else
+		self.work_type=workName;
+		self.work_name="@ui_work_"..workName;
+		HUD.SetProgressBar(true, 0, self.work_name);
+	end
+end
+
+SinglePlayer.Client.OnUpdate = function(self, dt)
+	OldSP(self, dt)
+	if not (g_gameRules.class == "InstantAction" or g_gameRules.class == "PowerStruggle") then
+		return;
+	end
+	
+	if g_gameRules.Client.ClStartWorking ~= HookedStartWorking then
+		--printf("Hooked ClStartWorking")
+		g_gameRules.Client.ClStartWorking = HookedStartWorking
+		--LinkToRules("ClStartWorking")
+	end
+	
 	if (not LAST_ACTOR) and g_localActor then
 		AuthLogin();
 		LAST_ACTOR=g_localActor;
@@ -70,35 +102,60 @@ g_gameRules.Client.OnUpdate=function(self,ft)
 		AuthLogin();
 		LAST_ACTOR=g_localActor;
 	end
-	if(self.show_scores == true) then
-		self:UpdateScores();
+	
+	local last=GARBAGELAST or (_time-150);
+	if _time-last>=60 then
+		local before=collectgarbage("count")
+		collectgarbage("collect")
+		local removed=before-collectgarbage("count")
+		TOTALREMOVED=(TOTALREMOVED or 0)+removed;
+		TIMESREMOVED=(TIMESREMOVED or 0)+1;
+		GARBAGELAST=_time;
+		--printf("Collecting garbage");
 	end
-	if CHANGEDREAL then
-		LASTREALCHECKCNT=UpdateRealism();
-		LASTREALCHECK=_time;
-		CHANGEDREAL=false;
-	end
-	if REALISM==0 then
-		if (LASTREALCHECK and _time-LASTREALCHECK>5) or (not LASTREALCHECK) then
-			local ents=System.GetEntitiesByClass("CustomAmmoPickup");
-			if ents then
-				for i,v in pairs(ents) do
-					if not v.effApplied then
-						UpdateForEntity(v);
-					end
+	
+	for i,params in pairs(ActiveAnims) do
+		if params then
+			local ent = params.entity;
+			if not ent then params.entity = System.GetEntityByName(params.name); ent = params.entity; end
+			if ent then
+				local dur = _time - params.start;
+				
+				if params.pos then
+					ent:SetWorldPos(lerp(params.pos.from, params.pos.to, dur / params.duration))
+				end
+				
+				if params.scale then
+					ent:SetScale(lerp(params.scale.from, params.scale.to, dur / params.duration))
+				end
+				
+				if dur >= params.duration then
+					ActiveAnims[i] = nil
 				end
 			end
-			LASTREALCHECK=_time;
 		end
 	end
+	
+	for i,v in pairs(ActiveFx) do
+		if v~=nil then
+			System.SetScreenFx(i, v)
+		end
+	end
+	
+	if (_LASTREALCHECK and _time-_LASTREALCHECK>5) or (not _LASTREALCHECK) then
+		local ents=System.GetEntitiesByClass("CustomAmmoPickup");
+		if ents then
+			for i,v in pairs(ents) do
+				if not v.effApplied then
+					UpdateForEntity(v);
+				end
+			end
+		end
+		_LASTREALCHECK=_time;
+	end 
+	
+	if OnUpdateEx then OnUpdateEx() end
 end
-
-LinkToRules("ClSetupPlayer");
-LinkToRules("OnUpdate");
-
-System.AddCCommand("garbage",[[
-	System.LogAlways(string.format(">>Garbage removed totally: %.3f MB, average: %.3f MB",TOTALREMOVED/1024,(TOTALREMOVED/1024)/TIMESREMOVED));
-]],"Info about garbage");
 
 if OnGameRulesLoadCallback then
 	OnGameRulesLoadCallback()

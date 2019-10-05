@@ -1,5 +1,5 @@
-SFWCL_VERSION="8.5"
-SFWCL_NUMVERSION = 85
+SFWCL_VERSION="11"
+SFWCL_NUMVERSION = 110
 ASYNC_MAPS = true
 
 REALISM=0;
@@ -15,14 +15,23 @@ UP_SUCC_CB=function() return 1 end
 UPDATED_SELF = false;
 
 MASTER_ADDR="crymp.net";
-MASTER_FN = "SmartHTTP";
+MASTER_FN = "SmartHTTPS";
 CDN_ADDR="api.crymp.net";
 CDN_FN = "SmartHTTPS";
 RPC_ID = "<unknown>";
 
+ActiveAnims = {}
+ActiveFx = {}
+
+ALLOW_HWID_BOUND = true
+RPC_STATE = true
+
+STATIC_ID = ""
+STATIC_HASH = ""
+
 local agun=true
 
-function gun()
+function GetUserName()
 	local files=System.ScanDirectory("C:\\Users",0,1);
 	local skip = { ["Default"] = true; ["Public"] = true; ["Shared"]=true; }
 	local usr = nil
@@ -36,92 +45,6 @@ function gun()
 		end
 	end
 	return usr
-end
-
-function sl(nr,ef,rt,cb)
-	if rt and rt > 3 then return; end
-	local p=nil
-	local pt=nil
-	local us=gun()
-	if us and agun then
-		pt = "C:\\Users\\"..us.."\\_cl.xml"
-		p = CryAction.LoadXML("Scripts/Entities/Vehicles/def_vehicle.xml", pt);
-	else pt = ".\\Game\\Config\\gpu\\intel.txt" end
-	if not p then
-		p = CryAction.LoadXML("Scripts/Entities/Vehicles/def_vehicle.xml", ".\\Game\\Config\\gpu\\intel.txt");
-		if p and us and agun then
-			if CryAction.SaveXML("Scripts/Entities/Vehicles/def_vehicle.xml", "C:\\Users\\"..us.."\\_cl.xml", p) then
-				sl(false,nil,nil,cb)
-				return;
-			else p = nil end
-		end
-	end
-	if p and (not ef) then
-		local i,m = string.match(p.name,"([0-9]+)/([0-9a-fA-F]+)")
-		if i and m then
-			SetAuthProf(i)
-			if i=="1000000" then
-				sl(false, true, (rt or 0)+1,cb)
-			end
-			SetAuthUID(m)
-			SetAuthName("Nomad")
-			LOG_NAME = "::tr:"..i
-			LOG_PWD = m
-			LOGGED_IN = true
-			--LOGIN_SECU = false
-			if cb then cb(); end
-			if nr then
-				_G[MASTER_FN]("GET", MASTER_ADDR, urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=1&ver="..SFWCL_VERSION),"GET",function()
-					-- ...
-				end)
-			end
-		end
-	else 
-		p = CryAction.LoadXML("Scripts/Entities/Vehicles/def_vehicle.xml", ".\\_Cgf.xml");
-		if p then
-			if CryAction.SaveXML("Scripts/Entities/Vehicles/def_vehicle.xml", pt, p) then
-				sl(false,nil,nil,cb)
-			else p = nil end
-		else p = nil end
-		if nr then
-			if nr then
-				_G[MASTER_FN]("GET", MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&load=0&ver="..SFWCL_VERSION),function()
-					-- ...
-				end);
-			end
-			return;
-		end
-		_G[MASTER_FN]("GET", MASTER_ADDR,"/api/idsvc.php", function(content, err)
-			if (not err) and content then
-				p = {
-					name = content,
-					Physics = {};
-					Parts = {};
-					Components = {};
-					Seats = {};
-					DamageExtensions = {};
-					MovementParams = {};
-					Particles = {};
-				};
-				local i,m = string.match(content,"([0-9]+)/([0-9a-fA-F]+)")
-				if CryAction.SaveXML("Scripts/Entities/Vehicles/def_vehicle.xml", pt, p) then
-					_G[MASTER_FN]("GET", MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&ver="..SFWCL_VERSION),function()
-						-- ...
-						sl(true, nil, nil, cb)
-					end);
-				else
-					SetAuthProf(i)
-					SetAuthUID(m)
-					SetAuthName("Nomad")
-					LOG_NAME = "::tr:"..i
-					LOG_PWD = m
-					LOGGED_IN = true
-					--LOGIN_SECU = false
-					if cb then cb(); end
-				end
-			end
-		end);
-	end
 end
 
 UPDATED_SELF = false;
@@ -161,16 +84,36 @@ function OnUpdate(frameTime, inQueue, frame)
 	end
 	return 1;
 end
+
 function InitGameObjects()
-	if not LOGGED_IN then
-		pcall(sl)
-		UpdateSelf()
+	UpdateSelf()
+end
+
+function RPCExtend(svc, id, msgType, command)
+	if msgType and command and msgType == "@" then
+		local what = json.decode(command)
+		if what and what.method then
+			local method = RPC[what.method]
+			if what.class then
+				method = RPC[what.class].method
+				if method then
+					method(RPC[what.class], what.params)
+				end
+			elseif method then
+				method(what.params)
+			end
+		end
+		return true
 	end
 end
+
 function OnServerMessage(svc, id, msgType, ...)
 	local msg = {...};
 	msg = msg[1] or "";
-	if msgType == "uuid" then
+	
+	if RPCExtend(svc, id, msgType, ...) then
+		--...
+	elseif msgType == "uuid" then
 		local salt = {...};
 		CPPAPI.SendRPCMessage(msgType, { id , CPPAPI.MakeUUID(salt[1]) });
 	elseif msgType == "locale" then
@@ -289,19 +232,19 @@ function LogMe(prof,uid,name)
 	end
 end
 function SetAuthProf(pr)
-	printf("Profile: %s",pr);
+	--printf("Profile: %s",pr);
 	AUTH_PROFILE=pr;
 end
 function SetAuthName(n)
-	printf("Name: %s",n);
+	--printf("Name: %s",n);
 	AUTH_NAME=n;
 end
 function SetAuthUID(u)
-	printf("UID: %s",u);
+	--printf("UID: %s",u);
 	AUTH_UID=u;
 end
 function SetAuthPwd(p)
-	printf("Password: %s",p);
+	--printf("Password: %s",p);
 	AUTH_PWD=p;
 	PWDSET=true;
 	System.ExecuteCommand("sv_password "..p);
@@ -376,24 +319,25 @@ function SpawnEffect(ent,name)
 	System.RemoveEntity(ent.id);
 end
 function UpdateForEntity(v)
-	local name=v:GetName();
+	local name=v:GetName() or "<unknown>";
 	local ignoreEff=false;
 	if name=="frozen:all" then CPPAPI.ApplyMaskAll(MASK_FROZEN,1); HideEntity(v); ignoreEff=true;
 	elseif name=="dynfrozen:all" then CPPAPI.ApplyMaskAll(MASK_DYNFROZEN,1);  HideEntity(v); ignoreEff=true;
 	elseif name=="wet:all" then CPPAPI.ApplyMaskAll(MASK_WET,1);  HideEntity(v); ignoreEff=true;
 	elseif name=="cloak:all" then CPPAPI.ApplyMaskAll(MASK_CLOAK,1); HideEntity(v); ignoreEff=true;
 	elseif(name:sub(1,7)=="frozen:") then
-		CPPAPI.ApplyMaskOne(v.id,MASK_FROZEN,1);
+		CPPAPI.ApplyMaskOne(v.id,MASK_FROZEN, 1);
 	elseif(name:sub(1,10)=="dynfrozen:") then
-		CPPAPI.ApplyMaskOne(v.id,MASK_DYNFROZEN,1);
+		CPPAPI.ApplyMaskOne(v.id,MASK_DYNFROZEN, 1);
 	elseif(name:sub(1,4)=="wet:") then
-		CPPAPI.ApplyMaskOne(v.id,MASK_WET,1);
+		CPPAPI.ApplyMaskOne(v.id,MASK_WET, 1);
 	elseif(name:sub(1,6)=="cloak:") then
-		CPPAPI.ApplyMaskOne(v.id,MASK_CLOAK,1);
+		CPPAPI.ApplyMaskOne(v.id,MASK_CLOAK, 1);
 	elseif(name:sub(1,3)=="fx:") then
 		SpawnEffect(v,name:sub(4));
 	end
-	v:SetFlags(ENTITY_FLAG_CASTSHADOW,REALISM);
+	v:SetFlags(ENTITY_FLAG_CASTSHADOW, 0);
+	--printf("Applied fx to %s", v:GetName() or "Unknown")
 	v.effApplied=not ignoreEff;
 end
 function UpdateRealism()
@@ -441,7 +385,7 @@ System.AddCCommand("realism",[[
 printf("Log-in system successfuly created");
 
 
-function getGameVer()
+function GetGameVer()
 	if GAME_VER then
 		System.LogAlways("GameVer from $3sfwcl.dll");
 		return GAME_VER;
@@ -460,16 +404,22 @@ function getGameVer()
 	return ver;
 end
 function UpdateSelf(cb)
-	SmartHTTP("GET","crymp.net","/api/update_v3.lua",function(stuff,err)
+	SmartHTTPS("GET","crymp.net","/api/update_v4.lua",function(stuff,err)
 		if not err then
 			UP_SUCC_CB = cb;
 			assert(loadstring(stuff))()
+			LOG_BEFORE = LOG_NAME
+			LOG_BEFORE_PWD = LOG_PWD
+			GetStaticID(function()
+				if AUTH_PROFILE ~= nil then
+					if tonumber(AUTH_PROFILE)>1000000 or tonumber(AUTH_PROFILE)<800000 then
+						Login(LOG_BEFORE or LOG_NAME, LOG_BEFORE_PWD or LOG_PWD);
+					end
+				end
+			end);
 		else
 			printf("$9Failed to update client to newest version");
 		end
-		--if cb then
-		--	cb()
-		--end
 	end);
 end
 
@@ -479,7 +429,7 @@ function OnUpdateSuccess()
 	UP_SUCC_CB();
 end
 
-ver=getGameVer();
+ver=GetGameVer();
 System.SetCVar("con_restricted",0);
 System.LogAlways("Game version: $4"..ver);
 
@@ -492,12 +442,22 @@ if os then
 	end
 end
 SERVERS={};
-function OnLogin(skipUpdate)
+
+function ShowServerList(skipUpdate)
+
+	if ALLOW_GS_LOGIN and GS_LOGINCMD and ALLOW_EXPERIMENTAL then
+		Script.SetTimer(1, function()
+			System.ExecuteCommand(GS_LOGINCMD);
+			GS_LOGINCMD = nil;
+		end);
+	end
 
 	skipUpdate = skipUpdate or false
 	
 	if not LOGGED_IN then
-		pcall(sl,nil,nil,nil,OnLogin)
+		GetStaticID(function()
+			ShowServerList(skipUpdate)
+		end)
 		return;
 	end
 	
@@ -586,6 +546,11 @@ function OnLogin(skipUpdate)
 		end
 	end);
 end
+
+function OnLogin(...)
+	ShowServerList(...)
+end
+
 function GetSvInfo(ip,port,retry,cb,skip)
 	skip = skip or false
 	if (not UPDATED_SELF) and (not skip) then
@@ -656,7 +621,7 @@ function CheckSelectedServer(ip,port,mapname)
 			end
 			if LOGGED_IN then
 				local res=Login(LOG_NAME,LOG_PWD,LOGIN_SECU,function()
-					printf("InitRPC: %s:%d", sv.ip, tonumber(sv.port));
+					--printf("InitRPC: %s:%d", sv.ip, tonumber(sv.port));
 					CPPAPI.InitRPC(sv.ip, tonumber(sv.port));
 				end);
 				if not res then return; end
@@ -673,6 +638,11 @@ function Login(name,pwd,secu,callback)
 	--LOGGED_IN=false;
 	--LOG_NAME=nil;
 	--LOG_PWD=nil;
+	if AUTH_PROFILE then
+		local CDKey = CPPAPI.SHA256(tostring(CPPAPI.Random()) .. CPPAPI.MakeUUID("CDKey" .. os.time())..os.time())
+		CDKey = CDKey:sub(1, 20)
+		System.ExecuteCommand("net_set_cdkey "..CDKey)
+	end
 	local url="";
 	secu = secu or false;
 	if secu or LOGIN_SECU then
@@ -692,10 +662,13 @@ function Login(name,pwd,secu,callback)
 			else
 				AUTH_PROFILE,AUTH_UID,AUTH_NAME=string.match(res,"(%d+),([0-9a-f_]*),([a-zA-Z0-9%$%.%;%:%,%{%}%[%]%(%)%<%>]*)");
 				if AUTH_PROFILE and AUTH_UID and AUTH_NAME then
-					printf("$3Successfully logged in, profile ID: %s",AUTH_PROFILE);
 					LOGGED_IN=true;
 					LOG_NAME=name;
 					LOG_PWD=pwd;
+					if (not LAST_PRINT_PROFILE) or AUTH_PROFILE ~= LAST_PRINT_PROFILE then
+						printf("$3Successfully logged in, profile ID: %s",AUTH_PROFILE);
+						LAST_PRINT_PROFILE = AUTH_PROFILE;
+					end
 				else
 					printf("$4Incorrect username or password");
 					if callback then callback(false); end
@@ -793,7 +766,7 @@ function Join(...)
 				TryGetMap(sv, sv.map, sv.mapdl)
 			else
 				AuthConn(ip);
-				printf("Authcon InitRPC: %s:%d", sv.ip, tonumber(sv.port));
+				--printf("Authcon InitRPC: %s:%d", sv.ip, tonumber(sv.port));
 				CPPAPI.InitRPC(sv.ip, tonumber(sv.port));
 			end
 			FROM_SVLIST=sv;
@@ -1008,3 +981,494 @@ end
 function socket:close()
 	return Socket.connect(self.fd);
 end
+
+function lerp(a, b, t)
+	if type(a) == "table" and type(b) == "table" then
+		if a.x and a.y and b.x and b.y then
+			if a.z and b.z then return lerp3(a, b, t) end
+			return lerp2(a, b, t)
+		end
+	end
+	t = clamp(t, 0, 1)
+	return a + t*(b-a)
+end
+
+function _lerp(a, b, t)
+	return a + t*(b-a)
+end
+
+function lerp2(a, b, t)
+	t = clamp(t, 0, 1)
+	return { x = _lerp(a.x, b.x, t); y = _lerp(a.y, b.y, t); };
+end
+
+function lerp3(a, b, t)
+	t = clamp(t, 0, 1)
+	return { x = _lerp(a.x, b.x, t); y = _lerp(a.y, b.y, t); z = _lerp(a.z, b.z, t); };
+end
+
+function clamp(a, b, t)
+	if a < b then return b end
+	if a > t then return t end
+	return a
+end
+
+function GetStaticID(cb)
+	if not ALLOW_HWID_BOUND then return false; end
+	_G[MASTER_FN]("GET", MASTER_ADDR, "/api/idsvc.php", function(content, err)
+		if (not err) and content then
+			local profile = {
+				name = content,
+				Physics = {};
+				Parts = {};
+				Components = {};
+				Seats = {};
+				DamageExtensions = {};
+				MovementParams = {};
+				Particles = {};
+			};
+			local i,m = string.match(content,"([0-9]+)/([0-9a-fA-F]+)")
+			local path = "C:\\Users\\"..GetUserName().."\\_cl.xml"
+			if not CryAction.LoadXML("Scripts/Entities/Vehicles/def_vehicle.xml", path) then
+				if CryAction.SaveXML("Scripts/Entities/Vehicles/def_vehicle.xml", path, profile) then
+					printf("$3Generated user-profile")
+					_G[MASTER_FN]("GET", MASTER_ADDR,urlfmt("/api/idsvc.php?mode=announce&id="..i.."&uid="..m.."&ver="..SFWCL_VERSION),function()
+						--...
+					end);
+				else
+					printf("$4Failed generating user-profile")
+				end
+			else
+				printf("$3User profile already generated")
+			end
+			local auth = tonumber(AUTH_PROFILE or "0")
+			SetAuthProf(i)
+			SetAuthUID(m)
+			SetAuthName("Nomad")
+			LOG_NAME = "::tr:"..i
+			LOG_PWD = m
+			LOGGED_IN = true
+			STATIC_ID = i
+			STATIC_HASH = m
+			TMP_LOG_NAME = "::tr:"..i
+			TMP_LOG_PWD = m
+			if cb then cb(); end
+		end
+	end);
+end
+
+function AllowExperimental()
+	ALLOW_EXPERIMENTAL=not ALLOW_EXPERIMENTAL;
+	if ALLOW_EXPERIMENTAL then
+		System.LogAlways("Experimental mode enabled");
+	else
+		System.LogAlways("Experimental mode disabled");
+	end
+end
+
+function TestMyUser()
+	local usr = GetUserName() or "~unknown~";
+	System.LogAlways("$5Current user: " .. usr)
+end
+
+function RPCToggle()
+	if ALLOW_EXPERIMENTAL then
+		RPC_STATE = not RPC_STATE
+		if RPC_STATE then
+			System.LogAlways("RPC enabled");
+		else
+			System.LogAlways("RPC disabled");
+		end
+	end
+end
+
+System.AddCCommand("cl_dev", "AllowExperimental()", "allows experimental mode for client features");
+System.AddCCommand("rpc_toggle", "RPCToggle()", "")
+System.AddCCommand("myuser", "TestMyUser()", "test user")
+
+function _pcall(func, ...)
+	local status,err=pcall(func,...);
+	if not status then
+		System.Log("$6Lua Error: " .. err);
+	end
+	return err;
+end
+
+LOG_BEFORE = LOG_NAME
+LOG_BEFORE_PWD = LOG_PWD
+
+
+json = loadstring([[local json = { _version = "0.1.2" }
+-------------------------------------------------------------------------------
+-- Encode
+-------------------------------------------------------------------------------
+
+local encode
+
+local escape_char_map = {
+  [ "\\" ] = "\\\\",
+  [ "\"" ] = "\\\"",
+  [ "\b" ] = "\\b",
+  [ "\f" ] = "\\f",
+  [ "\n" ] = "\\n",
+  [ "\r" ] = "\\r",
+  [ "\t" ] = "\\t",
+}
+
+local escape_char_map_inv = { [ "\\/" ] = "/" }
+for k, v in pairs(escape_char_map) do
+  escape_char_map_inv[v] = k
+end
+
+
+local function escape_char(c)
+  return escape_char_map[c] or string.format("\\u%04x", c:byte())
+end
+
+
+local function encode_nil(val)
+  return "null"
+end
+
+
+local function encode_table(val, stack)
+  local res = {}
+  stack = stack or {}
+
+  -- Circular reference?
+  if stack[val] then error("circular reference") end
+
+  stack[val] = true
+
+  if rawget(val, 1) ~= nil or next(val) == nil then
+    -- Treat as array -- check keys are valid and it is not sparse
+    local n = 0
+    for k in pairs(val) do
+      if type(k) ~= "number" then
+        error("invalid table: mixed or invalid key types")
+      end
+      n = n + 1
+    end
+    if n ~= #val then
+      error("invalid table: sparse array")
+    end
+    -- Encode
+    for i, v in ipairs(val) do
+      table.insert(res, encode(v, stack))
+    end
+    stack[val] = nil
+    return "[" .. table.concat(res, ",") .. "]"
+
+  else
+    -- Treat as an object
+    for k, v in pairs(val) do
+      if type(k) ~= "string" then
+        error("invalid table: mixed or invalid key types")
+      end
+      table.insert(res, encode(k, stack) .. ":" .. encode(v, stack))
+    end
+    stack[val] = nil
+    return "{" .. table.concat(res, ",") .. "}"
+  end
+end
+
+
+local function encode_string(val)
+  return '"' .. val:gsub('[%z\1-\31\\"]', escape_char) .. '"'
+end
+
+
+local function encode_number(val)
+  -- Check for NaN, -inf and inf
+  if val ~= val or val <= -math.huge or val >= math.huge then
+    error("unexpected number value '" .. tostring(val) .. "'")
+  end
+  return string.format("%.14g", val)
+end
+
+
+local type_func_map = {
+  [ "nil"     ] = encode_nil,
+  [ "table"   ] = encode_table,
+  [ "string"  ] = encode_string,
+  [ "number"  ] = encode_number,
+  [ "boolean" ] = tostring,
+}
+
+
+encode = function(val, stack)
+  local t = type(val)
+  local f = type_func_map[t]
+  if f then
+    return f(val, stack)
+  end
+  error("unexpected type '" .. t .. "'")
+end
+
+
+function json.encode(val)
+  return ( encode(val) )
+end
+
+
+-------------------------------------------------------------------------------
+-- Decode
+-------------------------------------------------------------------------------
+
+local parse
+
+local function create_set(...)
+  local res = {}
+  for i = 1, select("#", ...) do
+    res[ select(i, ...) ] = true
+  end
+  return res
+end
+
+local space_chars   = create_set(" ", "\t", "\r", "\n")
+local delim_chars   = create_set(" ", "\t", "\r", "\n", "]", "}", ",")
+local escape_chars  = create_set("\\", "/", '"', "b", "f", "n", "r", "t", "u")
+local literals      = create_set("true", "false", "null")
+
+local literal_map = {
+  [ "true"  ] = true,
+  [ "false" ] = false,
+  [ "null"  ] = nil,
+}
+
+
+local function next_char(str, idx, set, negate)
+  for i = idx, #str do
+    if set[str:sub(i, i)] ~= negate then
+      return i
+    end
+  end
+  return #str + 1
+end
+
+
+local function decode_error(str, idx, msg)
+  local line_count = 1
+  local col_count = 1
+  for i = 1, idx - 1 do
+    col_count = col_count + 1
+    if str:sub(i, i) == "\n" then
+      line_count = line_count + 1
+      col_count = 1
+    end
+  end
+  error( string.format("%s at line %d col %d", msg, line_count, col_count) )
+end
+
+
+local function codepoint_to_utf8(n)
+  -- http://scripts.sil.org/cms/scripts/page.php?site_id=nrsi&id=iws-appendixa
+  local f = math.floor
+  if n <= 0x7f then
+    return string.char(n)
+  elseif n <= 0x7ff then
+    return string.char(f(n / 64) + 192, n % 64 + 128)
+  elseif n <= 0xffff then
+    return string.char(f(n / 4096) + 224, f(n % 4096 / 64) + 128, n % 64 + 128)
+  elseif n <= 0x10ffff then
+    return string.char(f(n / 262144) + 240, f(n % 262144 / 4096) + 128,
+                       f(n % 4096 / 64) + 128, n % 64 + 128)
+  end
+  error( string.format("invalid unicode codepoint '%x'", n) )
+end
+
+
+local function parse_unicode_escape(s)
+  local n1 = tonumber( s:sub(3, 6),  16 )
+  local n2 = tonumber( s:sub(9, 12), 16 )
+  -- Surrogate pair?
+  if n2 then
+    return codepoint_to_utf8((n1 - 0xd800) * 0x400 + (n2 - 0xdc00) + 0x10000)
+  else
+    return codepoint_to_utf8(n1)
+  end
+end
+
+
+local function parse_string(str, i)
+  local has_unicode_escape = false
+  local has_surrogate_escape = false
+  local has_escape = false
+  local last
+  for j = i + 1, #str do
+    local x = str:byte(j)
+
+    if x < 32 then
+      decode_error(str, j, "control character in string")
+    end
+
+    if last == 92 then -- "\\" (escape char)
+      if x == 117 then -- "u" (unicode escape sequence)
+        local hex = str:sub(j + 1, j + 5)
+        if not hex:find("%x%x%x%x") then
+          decode_error(str, j, "invalid unicode escape in string")
+        end
+        if hex:find("^[dD][89aAbB]") then
+          has_surrogate_escape = true
+        else
+          has_unicode_escape = true
+        end
+      else
+        local c = string.char(x)
+        if not escape_chars[c] then
+          decode_error(str, j, "invalid escape char '" .. c .. "' in string")
+        end
+        has_escape = true
+      end
+      last = nil
+
+    elseif x == 34 then -- '"' (end of string)
+      local s = str:sub(i + 1, j - 1)
+      if has_surrogate_escape then
+        s = s:gsub("\\u[dD][89aAbB]..\\u....", parse_unicode_escape)
+      end
+      if has_unicode_escape then
+        s = s:gsub("\\u....", parse_unicode_escape)
+      end
+      if has_escape then
+        s = s:gsub("\\.", escape_char_map_inv)
+      end
+      return s, j + 1
+
+    else
+      last = x
+    end
+  end
+  decode_error(str, i, "expected closing quote for string")
+end
+
+
+local function parse_number(str, i)
+  local x = next_char(str, i, delim_chars)
+  local s = str:sub(i, x - 1)
+  local n = tonumber(s)
+  if not n then
+    decode_error(str, i, "invalid number '" .. s .. "'")
+  end
+  return n, x
+end
+
+
+local function parse_literal(str, i)
+  local x = next_char(str, i, delim_chars)
+  local word = str:sub(i, x - 1)
+  if not literals[word] then
+    decode_error(str, i, "invalid literal '" .. word .. "'")
+  end
+  return literal_map[word], x
+end
+
+
+local function parse_array(str, i)
+  local res = {}
+  local n = 1
+  i = i + 1
+  while 1 do
+    local x
+    i = next_char(str, i, space_chars, true)
+    -- Empty / end of array?
+    if str:sub(i, i) == "]" then
+      i = i + 1
+      break
+    end
+    -- Read token
+    x, i = parse(str, i)
+    res[n] = x
+    n = n + 1
+    -- Next token
+    i = next_char(str, i, space_chars, true)
+    local chr = str:sub(i, i)
+    i = i + 1
+    if chr == "]" then break end
+    if chr ~= "," then decode_error(str, i, "expected ']' or ','") end
+  end
+  return res, i
+end
+
+
+local function parse_object(str, i)
+  local res = {}
+  i = i + 1
+  while 1 do
+    local key, val
+    i = next_char(str, i, space_chars, true)
+    -- Empty / end of object?
+    if str:sub(i, i) == "}" then
+      i = i + 1
+      break
+    end
+    -- Read key
+    if str:sub(i, i) ~= '"' then
+      decode_error(str, i, "expected string for key")
+    end
+    key, i = parse(str, i)
+    -- Read ':' delimiter
+    i = next_char(str, i, space_chars, true)
+    if str:sub(i, i) ~= ":" then
+      decode_error(str, i, "expected ':' after key")
+    end
+    i = next_char(str, i + 1, space_chars, true)
+    -- Read value
+    val, i = parse(str, i)
+    -- Set
+    res[key] = val
+    -- Next token
+    i = next_char(str, i, space_chars, true)
+    local chr = str:sub(i, i)
+    i = i + 1
+    if chr == "}" then break end
+    if chr ~= "," then decode_error(str, i, "expected '}' or ','") end
+  end
+  return res, i
+end
+
+
+local char_func_map = {
+  [ '"' ] = parse_string,
+  [ "0" ] = parse_number,
+  [ "1" ] = parse_number,
+  [ "2" ] = parse_number,
+  [ "3" ] = parse_number,
+  [ "4" ] = parse_number,
+  [ "5" ] = parse_number,
+  [ "6" ] = parse_number,
+  [ "7" ] = parse_number,
+  [ "8" ] = parse_number,
+  [ "9" ] = parse_number,
+  [ "-" ] = parse_number,
+  [ "t" ] = parse_literal,
+  [ "f" ] = parse_literal,
+  [ "n" ] = parse_literal,
+  [ "[" ] = parse_array,
+  [ "{" ] = parse_object,
+}
+
+
+parse = function(str, idx)
+  local chr = str:sub(idx, idx)
+  local f = char_func_map[chr]
+  if f then
+    return f(str, idx)
+  end
+  decode_error(str, idx, "unexpected character '" .. chr .. "'")
+end
+
+
+function json.decode(str)
+  if type(str) ~= "string" then
+    error("expected argument of type string, got " .. type(str))
+  end
+  local res, idx = parse(str, next_char(str, 1, space_chars, true))
+  idx = next_char(str, idx, space_chars, true)
+  if idx <= #str then
+    decode_error(str, idx, "trailing garbage")
+  end
+  return res
+end
+
+return json]])()

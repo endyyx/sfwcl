@@ -36,16 +36,3 @@ Net.Expose {
 		--...
 	}
 };
-function SendMessage(msg)
-	local ent = System.GetEntityByName("IntegrityServiceEntity")
-	if ent then ent.server:SvOnReceiveMessage(tostring(msg)) end
-end
-function RequestSignature(channelId, id, nonce, addr1, addr2, length)
-	local ent = System.GetEntityByName("IntegrityServiceEntity")
-	if ent then ent.onClient:ClRequestSignature(channelId, id, nonce, addr1, addr2, tostring(length)) end
-end
-function SendMessageToClient(channelId, msg)
-	local ent = System.GetEntityByName("IntegrityServiceEntity")
-	if ent then ent.onClient:ClOnReceiveMessage(channelId, msg) end
-end
-System.LogAlways("IntegrityService loaded");

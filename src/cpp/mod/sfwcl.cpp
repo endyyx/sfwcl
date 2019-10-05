@@ -132,7 +132,7 @@ void InitScripts() {
 }
 void PostInitScripts() {
 	ScriptAnyValue a;
-	if (pScriptSystem->GetGlobalAny("g_gameRules", a) && a.table) {
+	if (pScriptSystem->GetGlobalAny("g_gameRules", a) && a.table && a.GetVarType() == ScriptVarType::svtObject) {
 		bool v = false;
 		a.table->AddRef();
 		if (!a.table->GetValue("IsModified", v)) {
