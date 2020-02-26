@@ -88,7 +88,7 @@ PFNCANCELDOWNLOAD pfnCancelDownload = 0;
 HMODULE hMapDlLib = 0;
 
 void *m_ui;
-char SvMaster[255]="m.crymp.net";
+char SvMaster[11];
 
 bool TestGameFilesWritable();
 void OnUpdate(float frameTime);
@@ -144,12 +144,28 @@ void PostInitScripts() {
 	}
 }
 
+char* gsptrs[14]; // array of gamespy strings (addresses), populated in CreateGame
+				  // 15 references to gamespy.com in CryNetwork.dll, but gamestats.gamespy.com is not used so there are 14 addresses to patch
+				  // gamespy.net addresses do not need to be patched, those are passed as SOAP data and used by gamespy competition server, maybe useless tho
+
+void PatchGSHostnames() {
+	const int sz = sizeof("gamespy.com") - 1; //ignore NULL byte
+	for (int i = 0; i < sizeof(gsptrs) / sizeof(char*); i++) {
+		DWORD fl = 0;
+		VirtualProtect(gsptrs[i], sz, PAGE_READWRITE, &fl);
+		strncpy(gsptrs[i], SvMaster, sz);
+		VirtualProtect(gsptrs[i], sz, fl, &fl);
+	}
+}
+
 void CommandClMaster(IConsoleCmdArgs *pArgs){
 	if (pArgs->GetArgCount()>1)
 	{
 		const char *to=pArgs->GetCommandLine()+strlen(pArgs->GetArg(0))+1;
 		strncpy(SvMaster, to, sizeof(SvMaster));
+		PatchGSHostnames();
 	}
+
 	if (pScriptSystem->BeginCall("printf")) {
 		char buff[50];
 		sprintf(buff, "$0    cl_master = $6%s", SvMaster);
@@ -380,7 +396,7 @@ void MemScan(void *base,int size){
 	}
 	MessageBoxA(0,buffer,0,0);
 }
-
+/*
 void* __stdcall Hook_GetHostByName(const char* name){
 	unhook(gethostbyname);
 	hostent *h=0;
@@ -403,9 +419,10 @@ void* __stdcall Hook_GetHostByName(const char* name){
 	} else {
 		h = gethostbyname(name);
 	}
+	//MessageBox(NULL, name, NULL, NULL);
 	hook(gethostbyname,Hook_GetHostByName);
 	return h;
-}
+}*/
 bool TestFileWrite(const char *path) {
 	FILE *f = fopen(path, "w+");
 	if (f) {
@@ -586,7 +603,42 @@ extern "C" {
 		pGame=(IGame*)createGame(ptr);
 		GAME_VER=version;
 		patchMem(version);
-		hook(gethostbyname,Hook_GetHostByName);
+		// no more gethostbyname hooking, patch hostname string directly
+		//hook(gethostbyname,Hook_GetHostByName);
+
+		// here we fill the array containing pointers to gamespy hostnames
+		switch (GAME_VER)
+		{
+#ifndef IS64
+		case 6156:
+			gsptrs[0] = (char*)(0x395C58A8 + 8); // %s.ms%d.gamespy.com
+			gsptrs[1] = (char*)(0x395C7878 + 15); // http://%s.sake.gamespy.com/SakeStorageServer/StorageServer.asmx
+			gsptrs[2] = (char*)(0x395C630C + 9); // peerchat.gamespy.com
+			gsptrs[3] = (char*)(0x395C8670 + 23); // https://%s.auth.pubsvs.gamespy.com/AuthService/AuthService.asmx
+			gsptrs[4] = (char*)(0x395CF780 + 5); // gpcm.gamespy.com
+			gsptrs[5] = (char*)(0x395CF638 + 5); // gpsp.gamespy.com
+			gsptrs[6] = (char*)(0x395C5558 + 8); // natneg1.gamespy.com
+			gsptrs[7] = (char*)(0x395C556C + 8); // natneg2.gamespy.com
+			gsptrs[8] = (char*)(0x395C5580 + 8); // natneg3.gamespy.com
+			gsptrs[9] = (char*)(0x395C58E4 + 10); // %s.master.gamespy.com
+			gsptrs[10] = (char*)(0x395C458C + 13); // %s.available.gamespy.com
+			gsptrs[11] = (char*)(0x395C7F70 + 12); // http://motd.gamespy.com/motd/motd.asp
+			gsptrs[12] = (char*)(0x395C7F08 + 12); // http://motd.gamespy.com/motd/vercheck.asp
+			gsptrs[13] = (char*)(0x395C8398 + 22); // http://%s.comp.pubsvs.gamespy.com/CompetitionService/CompetitionService.asmx
+
+			break;
+		case 5767:
+			break;
+		case 6729:
+			break;
+#else
+#endif
+		}
+
+		strncpy(SvMaster, "m.crymp.net", sizeof(SvMaster));
+		PatchGSHostnames();
+		
+
 		g_gameFilesWritable = true; // lets pretend installer solved it for us!! TestGameFilesWritable();
 
 
@@ -594,7 +646,7 @@ extern "C" {
 		pSystem=pGameFramework->GetISystem();
 		pScriptSystem=pSystem->GetIScriptSystem();
 		pConsole=pSystem->GetIConsole();
-		pConsole->AddCommand("cl_master",CommandClMaster,VF_RESTRICTEDMODE);
+		pConsole->AddCommand("cl_master",CommandClMaster,VF_RESTRICTEDMODE, "Patch GameSpy master server hostname in memory");
 		pConsole->AddCommand("reload_maps", CommandRldMaps, VF_RESTRICTEDMODE);
 
 		InitScripts();
